@@ -193,6 +193,4 @@ Dự án được phân chia nhiệm vụ chuyên môn hóa theo 3 vai trò chí
 ## 📄 9. Giấy phép (License)
 
 Dự án được phân phối dưới giấy phép **MIT License**. Chi tiết xem tại file `LICENSE` (placeholder). Mọi đóng góp học thuật và phát triển vì cộng đồng y tế đều được hoan nghênh.
-#   c o c o p i l a _ 2 . 0 
- 
- 
+#
