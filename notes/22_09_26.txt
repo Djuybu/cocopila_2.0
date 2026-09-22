@@ -1,0 +1,6 @@
+Chia việc:
+- Làm data(convert chunk -> graph DB): Quế
+- Làm RAG pipeline
+- DevOps: Mzuy
+
+Tìm hiểu: Neo4J
