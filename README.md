@@ -172,12 +172,12 @@ Dự án được phân chia nhiệm vụ chuyên môn hóa theo 3 vai trò chí
 
 - **Dev A — Data Ingestion, Text Processing & Multilingual NLP:**
   - Xây dựng pipeline đọc, làm sạch và chunking tài liệu (`src/ingestion/`).
-  - Xây dựng và tối ưu bộ chỉ mục tìm kiếm từ khóa BM25 (`src/retrieval/bm25_search.py`).
+  - Xây dựng và tối ưu bộ chỉ mục tìm kiếm từ khóa BM25 (`src/retrieval/sparse_search.py`).
   - Tích hợp công cụ tách từ tiếng Việt (`pyvi`, `underthesea`) và module dịch thuật / mapping thuật ngữ y khoa (`src/multilingual/`).
   - Phụ trách kịch bản `scripts/ingest.py`.
 
 - **Dev B — Vector Retrieval, Reranking & Document Scoring:**
-  - Xây dựng và quản lý cơ sở dữ liệu vector Qdrant (`src/retrieval/vector_store.py`).
+  - Xây dựng và quản lý cơ sở dữ liệu vector Qdrant (`src/ingestion/indexer.py`).
   - Tích hợp mô hình nhúng `BAAI/bge-m3` và kỹ thuật trích xuất Dense Vector.
   - Xây dựng thuật toán kết hợp Hybrid Search (Convex Combination / RRF).
   - Triển khai Cross-Encoder Reranker (`BAAI/bge-reranker-v2-m3`) và thuật toán Max-P Document Scoring để xác định `relevant_docs` và `relevant_chunks`.
@@ -193,5 +193,6 @@ Dự án được phân chia nhiệm vụ chuyên môn hóa theo 3 vai trò chí
 ## 📄 9. Giấy phép (License)
 
 Dự án được phân phối dưới giấy phép **MIT License**. Chi tiết xem tại file `LICENSE` (placeholder). Mọi đóng góp học thuật và phát triển vì cộng đồng y tế đều được hoan nghênh.
-#   c o c o p i l a _ 2 . 0  
+#   c o c o p i l a _ 2 . 0 
+ 
  

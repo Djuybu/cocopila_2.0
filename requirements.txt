@@ -1,0 +1,57 @@
+# ============================================================
+# Medical RAG System — Dependencies
+# ============================================================
+# Cài đặt: pip install -r requirements.txt
+# GPU (CUDA 12.1): pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+# ============================================================
+
+# --- Core ML & Deep Learning ---
+torch>=2.1.0
+transformers>=4.40.0
+sentence-transformers>=3.0.0
+
+# --- LLM Inference (GGUF Quantized) ---
+llama-cpp-python>=0.3.0
+
+# --- Embedding & Reranking ---
+# BGE-M3 (via sentence-transformers)
+# bge-reranker-v2-m3 (via sentence-transformers CrossEncoder)
+FlagEmbedding>=1.2.0
+
+# --- Vector Database ---
+qdrant-client>=1.9.0
+
+# --- Sparse / Lexical Search ---
+rank-bm25>=0.2.2
+fastbm25>=0.0.3
+
+# --- Vietnamese NLP ---
+pyvi>=0.1.1
+underthesea>=6.8.0
+
+# --- Translation (NLLB) ---
+ctranslate2>=4.0.0
+sentencepiece>=0.2.0
+
+# --- Orchestration (LangGraph) ---
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-community>=0.3.0
+
+# --- Validation & Serialization ---
+jsonschema-rs>=0.24.0
+ijson>=3.3.0
+orjson>=3.10.0
+
+# --- Metrics & Evaluation ---
+scikit-learn>=1.5.0
+numpy>=1.26.0
+pandas>=2.2.0
+
+# --- Utilities ---
+tqdm>=4.66.0
+rich>=13.7.0
+pynvml>=11.5.0
+python-dotenv>=1.0.0
+loguru>=0.7.0
+typer>=0.12.0
