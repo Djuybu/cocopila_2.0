@@ -1,29 +1,34 @@
-"""Unit tests for SubmissionValidator."""
-
-__author__ = "Dev C (MLOps Lead)"
-
+"""Compatibility and malformed-schema tests for the historical validator path."""
 import pytest
+from src.utils.validator import SubmissionValidator
 
 
 class TestSubmissionValidator:
-    """Tập kiểm thử tính hợp lệ của schema và dữ liệu submission."""
+    def test_valid_submission(self):
+        validator = SubmissionValidator(["q"], ["d"], {"c": "d"})
+        assert validator.validate([{"id": "q", "relevant_docs": ["d"], "relevant_chunks": ["c"]}])[0]
 
-    def test_valid_submission(self) -> None:
-        """Kiểm tra trường hợp dữ liệu submission hoàn toàn hợp lệ theo schema."""
-        pytest.skip("Not implemented yet")
+    def test_invalid_missing_field(self):
+        assert not SubmissionValidator().validate_schema([{"id": "q"}])[0]
 
-    def test_invalid_missing_field(self) -> None:
-        """Kiểm tra phát hiện lỗi khi thiếu các trường bắt buộc (id, relevant_docs, relevant_chunks)."""
-        pytest.skip("Not implemented yet")
+    def test_duplicate_ids(self):
+        validator = SubmissionValidator()
+        has_duplicates, errors = validator.check_duplicates([
+            {"id": "q", "relevant_docs": ["d", "d"], "relevant_chunks": []}])
+        assert has_duplicates and errors
 
-    def test_duplicate_ids(self) -> None:
-        """Kiểm tra phát hiện các ID trùng lặp trong relevant_docs hoặc relevant_chunks."""
-        pytest.skip("Not implemented yet")
+    def test_empty_arrays_valid(self):
+        assert SubmissionValidator().validate_schema([
+            {"id": "q", "relevant_docs": [], "relevant_chunks": []}])[0]
 
-    def test_empty_arrays_valid(self) -> None:
-        """Kiểm tra tính hợp lệ khi mảng relevant_docs hoặc relevant_chunks rỗng."""
-        pytest.skip("Not implemented yet")
+    @pytest.mark.parametrize("data", [None, {}, [None], [{"id": "q", "relevant_docs": None, "relevant_chunks": []}]])
+    def test_malformed_schema(self, data):
+        assert not SubmissionValidator().validate_schema(data)[0]
 
-    def test_large_file_streaming(self) -> None:
-        """Kiểm tra khả năng streaming parse tệp JSON kích thước lớn với ijson mà không vượt ngưỡng RAM."""
-        pytest.skip("Not implemented yet")
+    def test_large_file_validation(self, tmp_path):
+        from src.utils.io import write_json
+        queries = [f"q{i}" for i in range(2000)]
+        data = [{"id": q, "relevant_docs": [], "relevant_chunks": []} for q in queries]
+        path = tmp_path / "large.json"
+        write_json(path, data)
+        assert SubmissionValidator(queries, [], {}).validate_file(path)[0]

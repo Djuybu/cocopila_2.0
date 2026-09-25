@@ -1,0 +1,5 @@
+fusion:
+  method: rrf
+  rrf_k: 60
+  alpha: 0.7
+  top_k: 200

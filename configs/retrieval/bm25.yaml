@@ -1,0 +1,12 @@
+extends: ../data/prepared_prototype.yaml
+retrieval:
+  bm25:
+    enabled: true
+    index_path: ../../artifacts/indexes/bm25/prototype.json
+    top_k: 100
+    k1: 1.5
+    b: 0.75
+    epsilon: 0.25
+    # Baseline whitespace tokens; use segmented_text for presegmented input.
+    text_key: text
+    lowercase: false

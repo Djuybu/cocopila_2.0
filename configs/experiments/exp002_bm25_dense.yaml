@@ -1,0 +1,3 @@
+extends: base.yaml
+run_name: exp002
+reranker: {enabled: false}

@@ -1,0 +1,24 @@
+extends:
+  - ../retrieval/bm25.yaml
+  - ../retrieval/dense_bge_m3.yaml
+  - ../retrieval/hybrid_rrf.yaml
+  - ../reranker/bge_reranker.yaml
+output_dir: ../../outputs
+selector:
+  # Scores depend on fusion/model. Calibrate thresholds on validation data.
+  chunk_threshold: null
+  chunk_fallback: 3
+  chunk_max: 20
+  doc_aggregation: max
+  doc_top_k: 3
+  doc_weight: 0.5
+  doc_threshold: null
+  doc_fallback: 2
+  doc_max: 10
+evaluation:
+  labels_path: null
+  metrics: [precision, recall, f1, f2, "recall@10", "precision@10"]
+  candidate_k: 100
+  zero_division: 0.0
+submission:
+  output_dir: ../../submissions/public

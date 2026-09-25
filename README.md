@@ -1,196 +1,293 @@
-# 🏥 Medical RAG System — Hệ thống RAG Đa Ngôn ngữ Y Sinh
+# Medical Retrieval / RAG Competition
 
-<!-- Badges placeholder -->
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Qdrant](https://img.shields.io/badge/Qdrant-Vector%20DB-red.svg)](https://qdrant.tech)
-[![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph-orange.svg)](https://github.com/langchain-ai/langgraph)
+Python pipeline cho truy xuất tài liệu y khoa:
 
----
+**data → retrieval → reranking → scoring → evaluation → submission**
 
-## 📖 1. Giới thiệu tổng quan (Overview)
+Baseline BM25 chạy trên CPU. Dense dùng BGE-M3 + Qdrant; reranking dùng
+bge-reranker-v2-m3. Model được nạp khi cần. Generation bằng Qwen, multilingual và
+các interface preprocessing cũ được giữ lại nhưng chưa triển khai.
 
-**Medical RAG System** là hệ thống Hỏi - Đáp và Khai phá Tri thức Y sinh học Đa ngôn ngữ (**Multilingual Biomedical Retrieval-Augmented Generation**) được thiết kế chuyên sâu cho các truy vấn y khoa phức tạp. Hệ thống giải quyết bài toán rào cản ngôn ngữ và tính phân tán của tài liệu học thuật y khoa thông qua khả năng liên kết tri thức xuyên suốt giữa ba ngôn ngữ: **Tiếng Việt, Tiếng Anh và Tiếng Trung** (`vi`, `en`, `zh`).
+Repo chưa chứa dataset hoặc model weights. Các lệnh dưới đây cần dữ liệu đầu vào
+theo schema mô tả; tests có corpus nhỏ riêng để kiểm tra pipeline.
 
-### Các tính năng trọng tâm:
-- **Truy xuất lai đa tầng (Hybrid Multistage Retrieval):** Kết hợp tìm kiếm từ khóa (BM25 với công cụ tách từ tiếng Việt chuyên biệt) và tìm kiếm ngữ nghĩa dày đặc (BGE-M3 Dense Vector) nhằm hạn chế tối đa hiện tượng bỏ sót thuật ngữ y khoa đặc thù.
-- **Tái xếp hạng chéo đa ngôn ngữ (Cross-Encoder Reranking):** Ứng dụng `bge-reranker-v2-m3` để chuẩn hóa và đánh giá tương đồng sâu sắc giữa câu hỏi và từng phân đoạn văn bản ở cấp độ token.
-- **Chiến lược tính điểm Max-P Document Scoring:** Cho phép xác định đồng thời các văn bản cấp độ tài liệu liên quan (`relevant_docs`) và các trích đoạn văn bản mang tính quyết định (`relevant_chunks`).
-- **Sinh phản hồi chuẩn xác & có bằng chứng y khoa:** Kết hợp mô hình ngôn ngữ lớn `Qwen2.5-7B-Instruct` đã lượng tử hóa (GGUF Q4_K_M) để suy luận an toàn, trích dẫn tài liệu tham chiếu và phản hồi người dùng bằng tiếng Việt tự nhiên, chính xác.
+## Repository structure
 
----
-
-## 🏛️ 2. Kiến trúc hệ thống (System Architecture)
-
-Quy trình xử lý truy vấn và suy luận của hệ thống được minh họa qua sơ đồ kiến trúc sau:
-
-```
-[User Query (Việt)] ──► [Query Expansion / NER] ──► [Hybrid Retrieval: BM25 + BGE-M3 Dense]
-                                                                  │
-[Max-P Doc Score] ◄── [Top 200 Candidates] ◄── [Convex Combination / RRF]
-        │                         │
-[relevant_docs]         [Cross-Encoder Reranker (Top 20)] ──► [relevant_chunks]
-                                  │
-                        [Prompt + LLM Generator] ──► [Phản hồi Y khoa]
-```
-
-### Luồng xử lý chi tiết:
-1. **Query Expansion & Medical NER:** Phân tích câu hỏi đầu vào, nhận diện thực thể y khoa (bệnh học, hoạt chất, triệu chứng) và mở rộng truy vấn đồng nghĩa đa ngữ.
-2. **Hybrid Retrieval:** Tìm kiếm song song trên kho dữ liệu qua:
-   - *BM25 Index:* Bắt chính xác tên thuốc, mã bệnh ICD, thuật ngữ y sinh hiếm.
-   - *BGE-M3 Dense Vector:* Bắt ngữ nghĩa tổng quan và quan hệ ngữ nghĩa xuyên ngôn ngữ.
-3. **Convex Combination / RRF:** Dung hợp kết quả từ BM25 và Vector Search để chọn lọc ra Top 200 ứng viên tiềm năng nhất.
-4. **Max-P Document Score:** Tổng hợp điểm số từ các chunks để xếp hạng và xuất ra danh sách văn bản liên quan (`relevant_docs`).
-5. **Cross-Encoder Reranker:** Đưa Top chunks qua mô hình `bge-reranker-v2-m3` để chọn lọc Top 10–20 chunks chuẩn xác nhất (`relevant_chunks`).
-6. **Prompt Assembly & LLM Generation:** Lắp ráp ngữ cảnh giàu thông tin cùng prompt y khoa nghiêm ngặt đưa vào `Qwen2.5-7B-Instruct` sinh câu trả lời hoàn chỉnh kèm chú dẫn.
-
----
-
-## 🛠️ 3. Công nghệ sử dụng (Tech Stack)
-
-| Thành phần | Công nghệ / Thư viện | Vai trò |
-| :--- | :--- | :--- |
-| **Large Language Model** | `Qwen2.5-7B-Instruct-GGUF` | Sinh phản hồi y khoa đa ngữ chất lượng cao, chạy tối ưu phần cứng qua `llama-cpp-python` |
-| **Dense Embedding** | `BAAI/bge-m3` | Vector hóa đa ngôn ngữ (1024 chiều), hỗ trợ văn bản dài lên tới 8192 tokens |
-| **Cross-Encoder Reranker** | `BAAI/bge-reranker-v2-m3` | Tái xếp hạng chính xác cao cho các ứng viên hàng đầu |
-| **Vector Database** | `Qdrant` | Lưu trữ vector nhúng, hỗ trợ bộ lọc metadata y khoa và tìm kiếm tương đồng tốc độ cao |
-| **Sparse / Lexical Search** | `rank-bm25` / `fastbm25` | Truy xuất từ khóa theo tần suất thuật ngữ y khoa |
-| **Xử lý tiếng Việt** | `pyvi`, `underthesea` | Tách từ, chuẩn hóa tiếng Việt cho pipeline chỉ mục lexical |
-| **Dịch thuật đa ngữ** | `NLLB` (`ctranslate2` / `transformers`) | Hỗ trợ đối chiếu thuật ngữ qua các ngôn ngữ vi - en - zh |
-| **Orchestration** | `LangGraph`, `LangChain` | Quản lý luồng trạng thái, kiểm soát tiến trình RAG dạng đồ thị (State Graph) |
-
----
-
-## 💾 4. Phân bổ tài nguyên VRAM (VRAM Budget)
-
-Hệ thống được thiết kế tối ưu hóa bộ nhớ GPU để vận hành ổn định trên các dòng GPU phổ thông có VRAM từ **12 GB đến 16 GB** (ví dụ RTX 3060/4060Ti 16GB, RTX 3090/4080/4090, Tesla T4):
-
-| Thành phần | Định dạng & Cấu hình | VRAM tiêu thụ ước tính | Ghi chú |
-| :--- | :--- | :--- | :--- |
-| **Qwen2.5-7B-Instruct** | GGUF Q4_K_M (Context 4k–8k) | **~4.5 GB** | Offload toàn bộ layers lên GPU qua `llama-cpp-python` |
-| **BGE-M3 Embedding** | FP16 / INT8 | **~2.2 GB** | Xử lý batch embed truy vấn & tài liệu |
-| **bge-reranker-v2-m3** | FP16 | **~1.5 GB** | Cross-Encoder tái chấm điểm Top 20 chunks |
-| **CUDA Runtime & Cache** | PyTorch Memory Overhead | **~0.5 GB** | Bộ đệm tính toán động trong quá trình suy luận |
-| **TỔNG CỘNG** | | **~8.7 GB / 15.0 GB** | **An toàn (~58% ngân sách VRAM 15GB)** |
-
----
-
-## 📂 5. Cấu trúc thư mục dự án (Project Structure)
-
-```
-cocopila_2.0/
-├── .gitignore                     # File cấu hình loại trừ cho Git
-├── requirements.txt               # Danh mục thư viện phụ thuộc của dự án
-├── README.md                      # Tài liệu hướng dẫn sử dụng và kiến trúc
-├── config/                        # Cấu hình tập trung của dự án
-│   ├── __init__.py
-│   └── settings.py                # Quản lý tham số mô hình, đường dẫn, cổng dịch vụ
-├── data/                          # Kho dữ liệu
-│   ├── raw/                       # Dữ liệu y khoa thô đầu vào (.json, .jsonl, .pdf)
-│   ├── processed/                 # Dữ liệu sau tiền xử lý, phân đoạn (chunks)
-│   ├── qdrant_db/                 # Không gian lưu trữ cơ sở dữ liệu vector Qdrant
-│   ├── bm25_index/                # Chỉ mục đảo BM25 đã được tuần tự hóa
-│   └── sample/                    # Tập dữ liệu kiểm thử nhỏ
-├── src/                           # Mã nguồn lõi (Core Modules)
-│   ├── __init__.py
-│   ├── ingestion/                 # Pipeline xử lý dữ liệu đầu vào và chunking
-│   ├── retrieval/                 # Hybrid Search, Dense Search, BM25, Reranker, Max-P
-│   ├── generation/                # Prompt Templates, LLM Wrapper, Pipeline Generator
-│   ├── multilingual/              # Dịch thuật, phát hiện ngôn ngữ, từ điển y khoa
-│   └── utils/                     # Tiện ích logging, GPU monitoring, metric helpers
-├── scripts/                       # Các kịch bản thực thi tác vụ dòng lệnh
-│   ├── ingest.py                  # Chạy quá trình nạp và lập chỉ mục dữ liệu
-│   ├── evaluate.py                # Đánh giá độ chính xác (Precision, Recall, MRR, NDCG)
-│   └── download_models.py         # Kịch bản tải tự động các mô hình trọng số
-├── notebooks/                     # Thư mục thí nghiệm và phân tích dữ liệu
-└── tests/                         # Bộ kiểm thử tự động (Unit test, Integration test)
+```text
+configs/
+  data/                  # Raw preparation + prepared dataset paths
+  retrieval/             # BM25, BGE-M3, fusion
+  reranker/              # BGE cross-encoder
+  experiments/           # exp000 BM25, exp001 dense, exp002 hybrid, exp003 full
+data/
+  raw/{prototype,competition}/
+  interim/{normalized,deduplicated,entity_extracted}/
+  processed/             # Canonical data; generated per dataset
+  mappings/              # Official chunk/document and internal/official mappings
+src/
+  data/                  # Loader, adapter, schema, split checks, indexing
+  retrieval/             # Interface, BM25, dense, fusion, candidate generator
+  reranking/             # Model scoring only
+  scoring/               # Chunk selection and document aggregation
+  evaluation/            # Retrieval metrics, F-beta, macro evaluator
+  submission/            # Generator, validator, ZIP
+  pipeline/              # Stage orchestration and CLI parsing
+  utils/                 # Config, I/O, logging, compatibility exports
+  ingestion/             # Old import aliases
+  generation/            # Preserved unfinished optional RAG components
+  multilingual/          # Preserved unfinished NER/translation/SHIFT components
+scripts/                  # Thin entrypoints
+artifacts/{indexes,models,cache}/
+outputs/<run_name>/        # Config, registry, candidates, scores, predictions, metrics
+experiments/              # Manual log and ablation notes
+submissions/{public,private}/
+tests/
+docs/                     # Architecture, migration, experiment notes, graph TODO
+config/                   # Preserved Settings and prompt templates
+notebooks/                # Preserved; no fake notebooks generated
 ```
 
----
+Mapping từng file: [docs/migration.md](docs/migration.md).
+Kiến trúc và quy ước scoring: [docs/architecture.md](docs/architecture.md).
+Tài liệu DEV_A/B/C và notes/ được giữ như ghi chú lịch sử; kiến trúc mới ở docs/.
 
-## 🚀 6. Hướng dẫn cài đặt (Installation)
+## Setup environment
 
-### 6.1. Yêu cầu hệ thống
-- Hệ điều hành: Windows 10/11, Linux (Ubuntu 20.04+)
-- Python: `>= 3.10`
-- GPU: Khuyến nghị NVIDIA GPU (>= 12GB VRAM), CUDA Toolkit 12.1 trở lên.
+Python >= 3.10:
 
-### 6.2. Các bước cài đặt
-
-1. **Khởi tạo môi trường ảo:**
-   ```bash
-   python -m venv venv
-   # Kích hoạt trên Windows:
-   .\venv\Scripts\activate
-   # Hoặc trên Linux/macOS:
-   source venv/bin/activate
-   ```
-
-2. **Cài đặt PyTorch tương thích CUDA 12.1:**
-   ```bash
-   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-   ```
-
-3. **Cài đặt các gói phụ thuộc dự án:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Cài đặt `llama-cpp-python` hỗ trợ tăng tốc phần cứng CUDA:**
-   ```bash
-   pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
-   ```
-
-5. **Cấu hình môi trường:**
-   Tạo file `.env` tại thư mục gốc dựa trên các thiết lập mặc định trong `config/settings.py`.
-
----
-
-## ⚡ 7. Hướng dẫn sử dụng nhanh (Quick Start)
-
-### Bước 1: Tải các mô hình trọng số
 ```bash
-python scripts/download_models.py
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[test]"
+python -m pytest -q
 ```
 
-### Bước 2: Nạp dữ liệu và xây dựng chỉ mục (Ingestion & Indexing)
-Đặt các file văn bản y tế thô vào thư mục `data/raw/` rồi chạy:
+Cho dense retrieval và reranking:
+
 ```bash
-python scripts/ingest.py --input-dir data/raw --chunk-size 512 --overlap 64
+python -m pip install -e ".[dense]"
 ```
 
-### Bước 3: Chạy đánh giá chất lượng hệ thống (Evaluation)
+Đọc Parquet: `python -m pip install -e ".[parquet]"`.
+requirements.txt giữ các dependencies đầy đủ của thiết kế RAG cũ, gồm generation;
+không cần cài toàn bộ để chạy BM25 competition baseline.
+
+Cài editable package là bước bắt buộc trước khi gọi scripts. Không sửa sys.path.
+Các lệnh ví dụ chạy tại repository root; dùng đường dẫn tuyệt đối cho --config
+hoặc --run-dir nếu gọi từ nơi khác.
+
+## Prepare data
+
+Đặt dữ liệu gốc tại data/raw/prototype/:
+
+- documents.json: array record có `doc_id` là string.
+- chunks.json: array record có `chunk_id`, `doc_id`, `text`.
+- queries.json: array record có `id`, `text`.
+- labels.json (nếu có): schema giống submission, dùng ID chính thức.
+
+Ví dụ record:
+
+```json
+{"chunk_id": "d_12345678_c000", "doc_id": "d_12345678", "text": "Nội dung tài liệu"}
+```
+
+Nếu rechunk nội bộ, bắt buộc cung cấp `official_chunk_id`:
+
+```json
+{"chunk_id": "internal_001", "official_chunk_id": "d_12345678_c000", "doc_id": "d_12345678", "text": "Nội dung"}
+```
+
+ID chính thức phải lấy từ corpus BTC. Không suy đoán hoặc tạo ID thay thế.
+Tên field khác có thể map qua `data.fields` trong YAML. Loader hỗ trợ JSON, JSONL,
+Parquet; sửa đường dẫn tương ứng trong config.
+
 ```bash
-python scripts/evaluate.py --test-set data/sample/test_questions.json
+python scripts/prepare_data.py --config configs/data/prototype.yaml
 ```
 
----
+Lệnh kiểm tra ID trùng, parent document và ghi:
 
-## 👥 8. Phân công vai trò dự án (Team Roles)
+```text
+data/processed/prototype/{documents,chunks,queries}.json
+data/mappings/prototype/chunk_to_doc.json
+data/mappings/prototype/internal_to_official_id.json
+```
 
-Dự án được phân chia nhiệm vụ chuyên môn hóa theo 3 vai trò chính:
+Không thay text, không tự segment/deduplicate/rechunk. Raw được giữ nguyên.
+Output đã tồn tại sẽ báo lỗi: dùng thư mục dataset version mới để chạy lại.
+Có thể thêm `data.splits.train.data_path`, `data.splits.val.data_path` trỏ tới
+records chứa doc_id để kiểm tra leakage theo document.
 
-- **Dev A — Data Ingestion, Text Processing & Multilingual NLP:**
-  - Xây dựng pipeline đọc, làm sạch và chunking tài liệu (`src/ingestion/`).
-  - Xây dựng và tối ưu bộ chỉ mục tìm kiếm từ khóa BM25 (`src/retrieval/sparse_search.py`).
-  - Tích hợp công cụ tách từ tiếng Việt (`pyvi`, `underthesea`) và module dịch thuật / mapping thuật ngữ y khoa (`src/multilingual/`).
-  - Phụ trách kịch bản `scripts/ingest.py`.
+Competition preparation dùng configs/data/competition.yaml. Sau đó tạo experiment
+config trỏ đến processed/competition và mappings/competition; không tự dùng
+prototype index cho corpus mới.
 
-- **Dev B — Vector Retrieval, Reranking & Document Scoring:**
-  - Xây dựng và quản lý cơ sở dữ liệu vector Qdrant (`src/ingestion/indexer.py`).
-  - Tích hợp mô hình nhúng `BAAI/bge-m3` và kỹ thuật trích xuất Dense Vector.
-  - Xây dựng thuật toán kết hợp Hybrid Search (Convex Combination / RRF).
-  - Triển khai Cross-Encoder Reranker (`BAAI/bge-reranker-v2-m3`) và thuật toán Max-P Document Scoring để xác định `relevant_docs` và `relevant_chunks`.
+## Run BM25 baseline
 
-- **Dev C — LLM Generation, Orchestration, MLOps Lead:**
-  - Tích hợp mô hình `Qwen2.5-7B-Instruct-GGUF` qua `llama-cpp-python` và xây dựng bộ Prompt Templates y khoa (`src/generation/`).
-  - Điều phối toàn bộ luồng RAG bằng `LangGraph` State Graph.
-  - Xây dựng REST API bằng `FastAPI` (`app/api.py`) và ứng dụng Web UI bằng `Streamlit` (`app/streamlit_app.py`).
-  - Xây dựng pipeline đo lường, đánh giá hệ thống (`scripts/evaluate.py`).
+```bash
+python scripts/build_bm25_index.py --config configs/retrieval/bm25.yaml
+python scripts/run_full_pipeline.py --config configs/experiments/exp000_bm25.yaml
+```
 
----
+Output ở outputs/exp000/. BM25 dùng rank-bm25 BM25Okapi. Tokenizer baseline
+tách whitespace, giữ nguyên hoa/thường theo config. Có thể dùng text_key:
+segmented_text khi corpus đã được tách từ. Snapshot index là JSON dưới artifacts/,
+không phải pickle. BM25-only không tải model.
 
-## 📄 9. Giấy phép (License)
+## Run dense baseline
 
-Dự án được phân phối dưới giấy phép **MIT License**. Chi tiết xem tại file `LICENSE` (placeholder). Mọi đóng góp học thuật và phát triển vì cộng đồng y tế đều được hoan nghênh.
-#
+Cài extra dense và có model/network cache cùng thiết bị phù hợp. Đổi device trong
+YAML nếu muốn chạy CPU; mặc định giữ cuda như cấu hình cũ.
+
+```bash
+python scripts/build_dense_index.py --config configs/retrieval/dense_bge_m3.yaml
+python scripts/run_full_pipeline.py --config configs/experiments/exp001_dense.yaml
+```
+
+Index Qdrant mới được ghi tại artifacts/indexes/dense/prototype_bge_m3/.
+Model, dimension, batch size, text field, query prefix và max sequence length
+được lấy từ YAML. Không tự xóa index cũ.
+
+## Run hybrid retrieval
+
+Sau khi đã build cả BM25 và dense index:
+
+```bash
+python scripts/run_full_pipeline.py --config configs/experiments/exp002_bm25_dense.yaml
+```
+
+Hybrid dùng RRF theo rank từng nguồn. CC cũng có sẵn qua fusion.method: cc,
+với đúng hai nguồn bm25 và dense. CandidateGenerator chỉ retrieval/fusion,
+không chứa reranker.
+
+## Run reranking
+
+Chạy từng stage của exp003 (chưa chạy full exp003 trước đó):
+
+```bash
+python scripts/run_retrieval.py --config configs/experiments/exp003_full.yaml
+python scripts/run_reranking.py --run-dir outputs/exp003
+python scripts/run_prediction.py --run-dir outputs/exp003
+```
+
+Hoặc chạy ba stage trong một lệnh:
+
+```bash
+python scripts/run_full_pipeline.py --config configs/experiments/exp003_full.yaml
+```
+
+Hai cách trên là lựa chọn thay thế: một run_name chỉ được tạo một lần.
+Reranker thêm rerank_score, không áp threshold. Scoring chọn chunks/docs theo
+threshold, fallback tối thiểu và max output; docs hỗ trợ max, mean_top_k, weighted.
+Nhiều internal chunks cùng một official chunk được gộp trước selection.
+
+Threshold mặc định null vì điểm RRF/BM25/cross-encoder khác thang đo. Hãy chọn
+threshold trên validation set; không coi raw reranker scores là xác suất đã calibrate.
+
+## Evaluate
+
+Ground truth phải đủ đúng tập query của run và dùng official IDs:
+
+```bash
+python scripts/run_evaluation.py --run-dir outputs/exp000 \
+  --ground-truth data/raw/prototype/labels.json
+
+python scripts/run_evaluation.py --run-dir outputs/exp000 \
+  --ground-truth data/raw/prototype/labels.json --stage candidates --k 100
+```
+
+Kết quả lần lượt là metrics_predictions.json và metrics_candidates.json.
+Nếu evaluation.labels_path được cấu hình, full pipeline tự đánh giá predictions;
+không gọi lại lệnh ghi cùng metrics file.
+
+Metric chính là macro F2 theo query, tách doc/chunk branch. Có Precision, Recall,
+F1, F2, Recall@K, Precision@K; metric helpers cũng hỗ trợ Hit@K, MRR, NDCG.
+Mặc định empty denominator = 0; Precision@K chia cho K. Rule cuộc thi chưa có
+trong repo, cần đối chiếu trước khi coi đây là điểm chính thức.
+
+## Generate submission
+
+```bash
+python scripts/make_submission.py --run exp003
+```
+
+Hoặc cho baseline CPU:
+
+```bash
+python scripts/make_submission.py --run-dir outputs/exp000
+```
+
+Tạo submissions/public/<run_name>.zip, chứa đúng predictions.json ở root.
+Đổi đích bằng --submission-dir hoặc submission.output_dir trong YAML.
+Validator kiểm tra đủ query, query ID trùng, đủ hai list (được rỗng), ID trùng
+trong list, doc/chunk tồn tại và không có internal chunk ID.
+Packaging sử dụng registry.json đã snapshot cùng run; không bỏ qua corpus validation.
+
+Schema:
+
+```json
+[
+  {
+    "id": "q_0001",
+    "relevant_docs": ["d_12345678"],
+    "relevant_chunks": ["d_12345678_c000"]
+  }
+]
+```
+
+## Experiment convention
+
+Mỗi experiment có run_name riêng, ví dụ exp014. Copy config, đổi run_name và
+hyperparameters; index/data paths phải khớp corpus/model. YAML hỗ trợ extends,
+deep merge; mọi *_path và *_dir tính tương đối từ file YAML khai báo giá trị đó.
+
+```text
+outputs/exp014/
+  config.yaml
+  registry.json
+  queries.json
+  run.log
+  candidates.jsonl
+  reranked.jsonl
+  predictions.json
+  metrics_predictions.json    # Khi có ground truth
+  metrics_candidates.json     # Khi chạy candidate evaluation
+```
+
+Config snapshot/log chứa run ID, dataset split, model, top-k, thresholds, output
+paths; evaluation ghi metrics. Không ghi đè run/index/dataset/ZIP cũ.
+Nếu stage lỗi, giữ artifact để chẩn đoán và dùng run_name mới khi chạy lại.
+CSV logs trong experiments/ và submissions/ dành cho ghi chú thủ công.
+
+Dataset, index, weights, cache và generated outputs đã được ignore.
+Không tạo giả các file Parquet, notebook, model config hoặc graph/training scripts.
+
+## Compatibility and pending work
+
+Import cũ vẫn được giữ qua alias, ví dụ:
+
+```python
+from src.retrieval.sparse_search import SparseRetriever  # alias BM25Retriever
+from src.retrieval.dense_search import DenseRetriever
+from src.retrieval.reranker import CrossEncoderReranker
+from src.retrieval.aggregator import DocumentAggregator
+from src.utils.validator import SubmissionValidator
+```
+
+Code mới dùng src.retrieval.bm25, src.retrieval.dense, src.reranking.bge,
+src.scoring.doc_aggregation và src.submission.validator.
+
+Legacy run_pipeline.py nhận --config / --config-path, chạy full pipeline mới.
+Các cờ cũ --data-path, --query-path, --output-path, --mode chuyển sang YAML và các
+entrypoint theo stage; chúng trước đây chỉ parse arguments rồi raise NotImplementedError.
+Legacy pack_submission.py vẫn nhận --input/-i, --output/-o và nay cần --registry
+trỏ tới outputs/<run_name>/registry.json để xác thực corpus.
+
+Settings.from_env và prompt templates trong config/ giữ nguyên. YAML điều khiển
+pipeline mới; không tự thay các giá trị YAML bằng environment settings.
+Legacy data/bm25_index và data/qdrant_db được giữ, nhưng run mới dùng artifacts/.
+
+TODO: GraphRetriever, graph schema/building, fine-tuning/hard negatives,
+VietnameseSegmentor/SlidingWindowChunker, multilingual NER/translation/SHIFT,
+generation và VRAM monitor chưa triển khai. Không gọi các interface này trong baseline.
+Xem [graph status](docs/graph_schema.md) và [experiment notes](docs/experiment_notes.md).

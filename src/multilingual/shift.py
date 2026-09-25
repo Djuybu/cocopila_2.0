@@ -1,8 +1,8 @@
 """Cơ chế SHIFT (Semantic Harmonization via Index-side Feature Transformation) hiệu chuẩn vector đa ngôn ngữ."""
 
-__author__ = "Dev B (AI Pipeline & Model Specialist)"
-
 from __future__ import annotations
+
+__author__ = "Dev B (AI Pipeline & Model Specialist)"
 
 from typing import Any, Dict, List, Tuple
 

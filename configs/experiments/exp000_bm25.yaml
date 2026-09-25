@@ -1,0 +1,5 @@
+extends: base.yaml
+run_name: exp000
+retrieval:
+  dense: {enabled: false}
+reranker: {enabled: false}

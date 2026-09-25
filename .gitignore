@@ -25,11 +25,13 @@ env/
 *.ipynb_checkpoints
 
 # Data & Models (large files)
-data/raw/*
-data/processed/*
-data/qdrant_db/*
-data/bm25_index/*
-!data/**/.gitkeep
+/data/
+artifacts/**
+!artifacts/**/
+!artifacts/**/.gitkeep
+outputs/**
+!outputs/**/
+!outputs/**/.gitkeep
 *.gguf
 *.bin
 *.safetensors
@@ -50,5 +52,13 @@ logs/
 *.log
 
 # Submission artifacts
-submissions/
+submissions/**
+!submissions/**/
+!submissions/**/.gitkeep
+!submissions/submission_log.csv
 *.zip
+
+# Tests / packaging
+.pytest_cache/
+.coverage
+htmlcov/

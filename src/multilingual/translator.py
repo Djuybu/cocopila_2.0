@@ -1,8 +1,8 @@
 """Module dịch thuật y khoa đa ngữ sử dụng mô hình NLLB-200 và framework kiểm soát chất lượng QTT-RAG."""
 
-__author__ = "Dev B (AI Pipeline & Model Specialist)"
-
 from __future__ import annotations
+
+__author__ = "Dev B (AI Pipeline & Model Specialist)"
 
 from typing import Any, Dict, List
 

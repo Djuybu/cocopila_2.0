@@ -1,0 +1,15 @@
+extends: ../data/prepared_prototype.yaml
+retrieval:
+  dense:
+    enabled: true
+    model: BAAI/bge-m3
+    device: cuda
+    index_dir: ../../artifacts/indexes/dense/prototype_bge_m3
+    collection: medical_chunks
+    dimension: 1024
+    max_seq_length: 8192
+    batch_size: 32
+    text_key: text
+    # Explicit legacy planned instruction, configurable per experiment.
+    query_prefix: "Represent this sentence for searching relevant passages: "
+    top_k: 100

@@ -5,8 +5,6 @@ __author__ = "Dev C (MLOps Lead)"
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any
-import pynvml
-from rich.console import Console
 
 
 class VRAMMonitor:

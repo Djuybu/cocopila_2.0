@@ -1,0 +1,12 @@
+# Preparation only. Input files must contain official corpus IDs.
+data:
+  raw_dir: ../../data/raw/prototype
+  documents_path: ../../data/raw/prototype/documents.json
+  chunks_path: ../../data/raw/prototype/chunks.json
+  queries_path: ../../data/raw/prototype/queries.json
+  output_dir: ../../data/processed/prototype
+  mappings_dir: ../../data/mappings/prototype
+  fields:
+    documents: {doc_id: doc_id}
+    chunks: {chunk_id: chunk_id, doc_id: doc_id, text: text}
+    queries: {id: id, text: text}

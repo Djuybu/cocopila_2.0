@@ -1,0 +1,7 @@
+# Inputs shared by index-building and experiment configs.
+data:
+  documents_path: ../../data/processed/prototype/documents.json
+  chunks_path: ../../data/processed/prototype/chunks.json
+  queries_path: ../../data/processed/prototype/queries.json
+  mappings_dir: ../../data/mappings/prototype
+  split: prototype

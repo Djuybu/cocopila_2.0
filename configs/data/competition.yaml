@@ -1,0 +1,8 @@
+extends: prototype.yaml
+data:
+  raw_dir: ../../data/raw/competition
+  documents_path: ../../data/raw/competition/documents.json
+  chunks_path: ../../data/raw/competition/chunks.json
+  queries_path: ../../data/raw/competition/queries.json
+  output_dir: ../../data/processed/competition
+  mappings_dir: ../../data/mappings/competition

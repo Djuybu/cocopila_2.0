@@ -1,8 +1,8 @@
 """Module quản lý nạp và thực thi mô hình ngôn ngữ lớn (LLM) lượng tử hóa qua llama-cpp-python."""
 
-__author__ = "Dev B (AI Pipeline & Model Specialist)"
-
 from __future__ import annotations
+
+__author__ = "Dev B (AI Pipeline & Model Specialist)"
 
 import gc
 from typing import Any, Dict, List, Optional

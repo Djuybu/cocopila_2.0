@@ -1,8 +1,8 @@
 """Trích xuất thực thể y khoa (Medical NER) và mở rộng truy vấn dựa trên ontology UMLS."""
 
-__author__ = "Dev B (AI Pipeline & Model Specialist)"
-
 from __future__ import annotations
+
+__author__ = "Dev B (AI Pipeline & Model Specialist)"
 
 from typing import Any, Dict, List, Optional
 

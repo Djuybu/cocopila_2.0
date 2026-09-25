@@ -1,0 +1,5 @@
+reranker:
+  enabled: true
+  model: BAAI/bge-reranker-v2-m3
+  device: cuda
+  batch_size: 32

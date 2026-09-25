@@ -2,13 +2,16 @@
 
 __author__ = "Dev B (AI Pipeline & Model Specialist)"
 
-from .dense_search import DenseRetriever
-from .sparse_search import SparseRetriever
-from .hybrid_fusion import HybridFusion
-from .reranker import CrossEncoderReranker
-from .aggregator import DocumentAggregator
+from src.retrieval.base import BaseRetriever
+from src.retrieval.dense import DenseRetriever
+from src.retrieval.bm25 import BM25Retriever, SparseRetriever
+from src.retrieval.fusion import HybridFusion
+from src.reranking.bge import CrossEncoderReranker
+from src.scoring.doc_aggregation import DocumentAggregator
 
 __all__ = [
+    "BaseRetriever",
+    "BM25Retriever",
     "DenseRetriever",
     "SparseRetriever",
     "HybridFusion",

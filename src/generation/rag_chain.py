@@ -1,8 +1,8 @@
 """Quy trình điều phối RAG y khoa sử dụng LangGraph StateGraph hỗ trợ cơ chế tự phản ánh (Reflection)."""
 
-__author__ = "Dev B (AI Pipeline & Model Specialist)"
-
 from __future__ import annotations
+
+__author__ = "Dev B (AI Pipeline & Model Specialist)"
 
 from typing import Any, Dict, List, Optional
 

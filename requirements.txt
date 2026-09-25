@@ -49,6 +49,7 @@ numpy>=1.26.0
 pandas>=2.2.0
 
 # --- Utilities ---
+PyYAML>=6.0
 tqdm>=4.66.0
 rich>=13.7.0
 pynvml>=11.5.0

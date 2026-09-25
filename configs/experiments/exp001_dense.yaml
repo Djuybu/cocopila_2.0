@@ -1,0 +1,5 @@
+extends: base.yaml
+run_name: exp001
+retrieval:
+  bm25: {enabled: false}
+reranker: {enabled: false}

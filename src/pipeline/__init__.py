@@ -1,0 +1,1 @@
+"""Medical competition pipeline package."""
