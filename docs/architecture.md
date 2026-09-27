@@ -75,6 +75,20 @@ Union mode retains first appearance and is order-based, not score-comparable.
 Named union/RRF outputs additionally retain `source_ranks`, `source_scores` and
 flat `bm25_rank`, `bm25_score`, `dense_rank`, `dense_score` when present.
 
+Persisted candidate artifacts use `medical-rag-candidates-v1`: one JSONL record
+per query, with a nested `candidates` list. Each candidate contains query/chunk/doc
+IDs, text, final rank/score, source, explicit nullable BM25/dense evidence and
+fused_score. `src/retrieval/schema.py` standardizes only artifact fields; retriever
+APIs and fusion algorithms remain unchanged. Missing sources are null, not fake
+zero scores. Runtime validation checks identity, coverage and source provenance.
+
+`src/pipeline/handoff.py` exports an existing benchmark method as a portable P2
+input bundle: candidates, queries, labels, registry, reranker config and a
+versioned SHA256 manifest. Original text/IDs and source fingerprints are checked
+before export. No original dataset/index paths are needed for received-bundle
+reranking; checksum/schema checks run before model loading. Weak-label/prototype
+warnings travel with the bundle. See [p1_p2_handoff.md](p1_p2_handoff.md).
+
 ## Reranking and selection
 
 The reranker retains retrieval score and adds rerank_score. The pipeline sends

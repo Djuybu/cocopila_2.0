@@ -11,6 +11,7 @@ from src.data.schema import validate_corpus
 from src.retrieval.bm25 import BM25Retriever
 from src.retrieval.candidate_generator import CandidateGenerator
 from src.retrieval.cache import CachedRetriever
+from src.retrieval.schema import standardize_candidates, validate_candidate_records
 from src.submission.validator import SubmissionValidator
 from src.utils.config import run_directory
 from src.utils.io import read_json, write_json, write_jsonl
@@ -157,9 +158,13 @@ def run_retrieval(config):
     try:
         with ExitStack() as stack:
             generator = create_generator(config, chunks, stack)
-            rows = ({"id": query["id"], "candidates": generator.generate(query["text"], config["fusion"]["top_k"])}
-                    for query in queries)
-            write_jsonl(run_dir / "candidates.jsonl", rows)
+            def rows():
+                for query in queries:
+                    row = {"id": query["id"], "candidates": standardize_candidates(
+                        query["id"], generator.generate(query["text"], config["fusion"]["top_k"]))}
+                    validate_candidate_records([row], [query], {**registry, "expected_query_ids": [query["id"]]})
+                    yield row
+            write_jsonl(run_dir / "candidates.jsonl", rows())
         logger.info("retrieval completed")
     except Exception:
         logger.exception("retrieval failed; keep run artifacts for diagnosis, use a new run_name to retry")

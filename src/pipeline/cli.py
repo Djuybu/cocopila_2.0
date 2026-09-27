@@ -7,7 +7,7 @@ from src.utils.config import load_config
 
 def main(command):
     parser = argparse.ArgumentParser(description=f"Medical competition: {command}")
-    if command in {"prepare_data", "build_bm25_index", "build_dense_index", "run_retrieval", "run_full_pipeline", "benchmark_retrieval", "download_mmedc"}:
+    if command in {"prepare_data", "build_bm25_index", "build_dense_index", "run_retrieval", "run_full_pipeline", "benchmark_retrieval", "download_mmedc", "export_reranking_input"}:
         parser.add_argument("--config", "--config-path", required=True, type=Path)
         if command == "benchmark_retrieval":
             parser.add_argument("--run-name", help="New run ID; existing output is never overwritten")
@@ -37,6 +37,10 @@ def main(command):
         config = load_config(args.config)
         if getattr(args, "run_name", None):
             config["run_name"] = args.run_name
+        if command == "export_reranking_input":
+            from src.pipeline.handoff import export_reranking_input
+            logging.info("Exported reranking input: %s", export_reranking_input(config))
+            return
         if command == "download_mmedc":
             from src.data.download import download_mmedc
             download_mmedc(config)
@@ -75,7 +79,11 @@ def main(command):
             run_dir = run_directory({"run_name": args.run, "output_dir": args.output_dir})
         if run_dir is None:
             parser.error("--run-dir is required (or --run for make_submission)")
-        if command == "run_reranking":
+        if command == "validate_reranking_input":
+            from src.pipeline.handoff import validate_reranking_input
+            manifest = validate_reranking_input(run_dir)
+            result = {key: manifest[key] for key in ("schema_version", "query_count", "candidate_count", "label_quality")}
+        elif command == "run_reranking":
             from src.pipeline.rerank import run_reranking
             result = run_reranking(run_dir)
         elif command == "run_prediction":

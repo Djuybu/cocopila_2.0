@@ -1,8 +1,6 @@
 # Mai Ngọc Duy — kết quả P1-01 đến P1-10
 
-Phạm vi: Người 1 theo Checklist và xác nhận của người dùng. Không sửa Google
-Sheet, không làm P1-11 trở đi, không chạy reranker hay chọn threshold.
-Mapping công việc: [p1_retrieval_plan.md](p1_retrieval_plan.md).
+Mapping công việc: [p1\_retrieval\_plan.md](p1_retrieval_plan.md).
 
 ## Dữ liệu và giới hạn bắt buộc
 
@@ -12,21 +10,21 @@ Nguồn [Henrychur/MMedC](https://huggingface.co/datasets/Henrychur/MMedC), revi
 weak labels; không diễn giải điểm dưới đây thành điểm cuộc thi.
 
 - Chỉ tải Chinese, English, Japanese, French; raw ZIP không bị sửa/giải nén hàng loạt.
-  Cả bốn ZIP đã tải xong và xác minh size/SHA256; manifest ở
-  `data/raw/mmedc/download_manifest.json` (19.55 GiB tổng cộng).
+Cả bốn ZIP đã tải xong và xác minh size/SHA256; manifest ở
+`data/raw/mmedc/download_manifest.json` (19.55 GiB tổng cộng).
 - Lấy mẫu 16 documents/ngôn ngữ, seed 42; đọc prefix giới hạn 8.000 ký tự/document.
 - Chỉ lấy member TXT, bỏ `__MACOSX` và `cultural_filtered_data_used` khi lấy mẫu;
-  các ZIP tải đầy đủ vẫn giữ nguyên mọi member.
+các ZIP tải đầy đủ vẫn giữ nguyên mọi member.
 - Query: 180 ký tự đầu. Weak positive: chunk liền kề đầu tiên sau query.
 - Chunk: 600 ký tự, overlap 100; mọi chunk bắt đầu sau query span.
 - 64 documents, 1.024 chunks, 64 queries; text query/chunk đều không trùng trên mẫu này.
 - Train/val/test = 51/7/6 documents và queries; không leakage theo document.
 - Sampling seed và split seed tách riêng. Seed split 1 được chọn **chỉ theo coverage
-  ngôn ngữ**, không theo recall: val có Chinese 1, English 3, Japanese 1, French 2.
+ngôn ngữ**, không theo recall: val có Chinese 1, English 3, Japanese 1, French 2.
 - Seed split 42 ban đầu thiếu Chinese/French trong val. Dataset/run đó được giữ
-  nguyên; kết quả chính dùng version `mmedc_p1_fourlang`.
+nguyên; kết quả chính dùng version `mmedc_p1_fourlang`.
 - Corpus 1.024 chunks gồm tất cả document splits làm không gian retrieval chung.
-  Không model nào được fine-tune trên các query này.
+Không model nào được fine-tune trên các query này.
 
 Positive liền kề không chắc relevant; chunk khác cùng document có thể relevant
 nhưng bị tính là false negative. Prefix query không mô phỏng câu hỏi của bác sĩ;
@@ -39,18 +37,20 @@ Mapping identity trong prototype không biến chúng thành competition IDs.
 
 ## Deliverables
 
-| Task | Kết quả |
-| --- | --- |
-| P1-01 | Typed schemas + `docs/schemas/prototype_records.json`; adapter anchor/positive/meta, reversible source IDs |
+
+| Task  | Kết quả                                                                                                                  |
+| ----- | ------------------------------------------------------------------------------------------------------------------------ |
+| P1-01 | Typed schemas + `docs/schemas/prototype_records.json`; adapter anchor/positive/meta, reversible source IDs               |
 | P1-02 | Dedup query-positive theo NFC/whitespace identity, giữ text gốc; merge negatives, bỏ contradictions; before/after report |
-| P1-03 | Seeded connected-component split: document/title/content/shared positive/query; lọc negative cross-split và đếm |
-| P1-04 | Canonical documents/chunks/queries/labels JSON + `chunk_corpus.jsonl`, split files và mappings |
-| P1-05 | BM25 Top-K configurable, opt-in CJK tokenizer, cache gắn corpus/config/query/K; benchmark tất cả val queries |
-| P1-06 | BGE-M3 normalized dense vectors, Qdrant cosine/dot config, model revision/dtype/index metadata |
-| P1-07 | E5 config với query/passage prefixes, cùng corpus/split/K/token limit; runner ghi recall/latency/RAM/VRAM |
-| P1-08 | Union dedup chunk ID, bảo toàn parent và bm25/dense rank/score provenance |
-| P1-09 | RRF k=20/60/100 dựa trên rank, tie-break theo chunk ID; delta recall so với union cùng K |
-| P1-10 | `evaluate_retrieval.py`: chunk/doc Recall@20/50/100/200, macro/per-query, missing IDs và fully missed queries |
+| P1-03 | Seeded connected-component split: document/title/content/shared positive/query; lọc negative cross-split và đếm          |
+| P1-04 | Canonical documents/chunks/queries/labels JSON + `chunk_corpus.jsonl`, split files và mappings                           |
+| P1-05 | BM25 Top-K configurable, opt-in CJK tokenizer, cache gắn corpus/config/query/K; benchmark tất cả val queries             |
+| P1-06 | BGE-M3 normalized dense vectors, Qdrant cosine/dot config, model revision/dtype/index metadata                           |
+| P1-07 | E5 config với query/passage prefixes, cùng corpus/split/K/token limit; runner ghi recall/latency/RAM/VRAM                |
+| P1-08 | Union dedup chunk ID, bảo toàn parent và bm25/dense rank/score provenance                                                |
+| P1-09 | RRF k=20/60/100 dựa trên rank, tie-break theo chunk ID; delta recall so với union cùng K                                 |
+| P1-10 | `evaluate_retrieval.py`: chunk/doc Recall@20/50/100/200, macro/per-query, missing IDs và fully missed queries            |
+
 
 Triplet adapter đã được test bằng triplets có nhãn rõ ràng trong fixtures; MMedC
 không được giả vờ là dataset triplet có supervision. Cùng text nhưng khác parent
@@ -67,29 +67,33 @@ long-context 8.192 tokens của BGE-M3.
 [BGE-M3](https://huggingface.co/BAAI/bge-m3) revision
 `5617a9f61b028005a4858fdac845db406aefb181`, không thêm instruction prefix.
 [Multilingual E5 large](https://huggingface.co/intfloat/multilingual-e5-large)
-revision `3d7cfbdacd47fdda877c5cd8a79fbcc4f2a574f3`, dùng `query: ` / `passage: `
+revision `3d7cfbdacd47fdda877c5cd8a79fbcc4f2a574f3`, dùng `query:` / `passage:`
 kể cả query không phải English. Config baseline cũ ngoài P1 được giữ nguyên.
 
 Kết quả hiện có trên split fourlang (weak macro recall):
 
-| Method | Chunk R@20 | R@50 | R@100 | R@200 | Doc R@20/50/100/200 | Mean latency/query |
-| --- | ---: | ---: | ---: | ---: | --- | ---: |
-| BM25 unicode_cjk | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1 / 1 / 1 / 1 | 22.31 ms |
-| BGE-M3 cosine | 0.8571 | 0.8571 | 1.0000 | 1.0000 | .8571 / .8571 / 1 / 1 | 69.43 ms |
-| BGE-M3 dot | 0.8571 | 0.8571 | 1.0000 | 1.0000 | .8571 / .8571 / 1 / 1 | 73.67 ms |
-| E5 large cosine | 0.8571 | 1.0000 | 1.0000 | 1.0000 | .8571 / 1 / 1 / 1 | 91.68 ms |
-| BM25+BGE union | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1 / 1 / 1 / 1 | 93.12 ms |
-| BM25+BGE RRF k=60 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1 / 1 / 1 / 1 | 93.48 ms |
+
+| Method            | Chunk R@20 | R@50   | R@100  | R@200  | Doc R@20/50/100/200   | Mean latency/query |
+| ----------------- | ----------: | ------: | ------: | ------: | --------------------- | ------------------: |
+| BM25 unicode\_cjk | 1.0000     | 1.0000 | 1.0000 | 1.0000 | 1 / 1 / 1 / 1         | 22.31 ms           |
+| BGE-M3 cosine     | 0.8571     | 0.8571 | 1.0000 | 1.0000 | .8571 / .8571 / 1 / 1 | 69.43 ms           |
+| BGE-M3 dot        | 0.8571     | 0.8571 | 1.0000 | 1.0000 | .8571 / .8571 / 1 / 1 | 73.67 ms           |
+| E5 large cosine   | 0.8571     | 1.0000 | 1.0000 | 1.0000 | .8571 / 1 / 1 / 1     | 91.68 ms           |
+| BM25+BGE union    | 1.0000     | 1.0000 | 1.0000 | 1.0000 | 1 / 1 / 1 / 1         | 93.12 ms           |
+| BM25+BGE RRF k=60 | 1.0000     | 1.0000 | 1.0000 | 1.0000 | 1 / 1 / 1 / 1         | 93.48 ms           |
+
 
 BGE dot đã chạy xong; recall ở cả bốn cutoffs bằng cosine trong lần đo này.
 Không suy rộng thành mọi raw score/ranking đều bằng nhau, nhất là với FP16.
 
-| Retrieval phase | Peak RSS | Peak torch CUDA allocated |
-| --- | ---: | ---: |
-| BM25-only | 86.52 MiB | N/A (CPU-only) |
-| BM25+BGE cosine | 2.526 GiB | 1.070 GiB |
-| BM25+BGE dot | 2.647 GiB | 1.070 GiB |
-| BM25+E5 cosine | 2.636 GiB | 1.056 GiB |
+
+| Retrieval phase | Peak RSS  | Peak torch CUDA allocated |
+| --------------- | ---------: | -------------------------: |
+| BM25-only       | 86.52 MiB | N/A (CPU-only)            |
+| BM25+BGE cosine | 2.526 GiB | 1.070 GiB                 |
+| BM25+BGE dot    | 2.647 GiB | 1.070 GiB                 |
+| BM25+E5 cosine  | 2.636 GiB | 1.056 GiB                 |
+
 
 Lựa chọn baseline tạm cho candidate budget 100/200: giữ BGE-M3 cosine trong
 P1 base config và BM25+BGE RRF k=60 làm hybrid mặc định. BGE và E5 cùng proxy
@@ -129,7 +133,7 @@ benchmark JSON, comparison CSV, từng method có candidates JSONL và recall JS
 Harness CLI riêng đã chạy ở `outputs/p1_candidate_recall/`.
 CSV nhỏ có thể track: `experiments/retrieval_benchmark_log.csv`.
 Bản tổng hợp số đo nhỏ, không chứa corpus/weights/candidates:
-[p1_retrieval_summary.json](../experiments/ablations/p1_retrieval_summary.json).
+[p1\_retrieval\_summary.json](../experiments/ablations/p1_retrieval_summary.json).
 Git HEAD ghi trong runs là `34d6aae` (base commit); code P1 chưa commit tại thời
 điểm đo, nên HEAD không phải bằng chứng source benchmark đã nằm trong commit đó.
 Implementation P1 sau đó được lưu trong commit `c59dfa2`.
@@ -148,8 +152,10 @@ bị ghi đè: dùng `--run-name` mới; preparation/index retry cần đổi ou
 - `git diff --check`: pass.
 - BM25/BGE cosine/BGE dot/E5 benchmark thực tế + standalone recall harness: pass.
 - Schema, document leakage và query-span exclusion checks trên prototype thực tế: pass.
-- Cả 4 raw ZIP size/SHA256 verified; file `.fdmdownload` cũ được giữ nguyên.
+- Cả 4 raw ZIP size/SHA256 verified.
 - Dataset/model/index/cache/output lớn đều bị Git ignore; không đưa vào commit.
 - TODO: thay weak qrels bằng retrieval labels thật trước quyết định model/hyperparameters.
 - TODO: mapping organizer IDs khi có corpus BTC; không nộp prototype IDs.
-- TODO ngoài scope: P1-11+, training/reranking/threshold; GraphRetriever chưa implement.
+- P1-11 đã bổ sung sau batch benchmark: [gói bàn giao Người 2](p1_p2_handoff.md).
+  Export không thay số đo retrieval ở trên; giữ nguyên weak labels và prototype IDs.
+- TODO ngoài scope: P1-12+, training/reranking/threshold; GraphRetriever chưa implement.

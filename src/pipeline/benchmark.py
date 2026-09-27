@@ -16,6 +16,7 @@ from src.evaluation.candidate_recall import evaluate_candidate_recall
 from src.pipeline.retrieve import (build_bm25_index, build_dense_index, corpus_fingerprint,
                                   create_generator, load_dataset)
 from src.retrieval.fusion import reciprocal_rank_fusion, union_candidates
+from src.retrieval.schema import standardize_candidates, validate_candidate_records
 from src.utils.config import run_directory
 from src.utils.io import read_json, write_json, write_jsonl
 from src.utils.logging import run_logger
@@ -116,7 +117,8 @@ def run_retrieval_benchmark(config):
                     "retrieval": inference.result, "cache_hits": cache_hits, "retriever_calls": total_calls}
         for name, records in results.items():
             for record in records:
-                record["candidates"] = [{**row, "query_id": record["id"]} for row in record["candidates"]]
+                record["candidates"] = standardize_candidates(record["id"], record["candidates"], method=name)
+            validate_candidate_records(records, queries, registry)
             write_jsonl(run_dir / name / "candidates.jsonl", records)
             report = evaluate_candidate_recall(records, labels, bench["cutoffs"], registry["internal_to_official"])
             durations = timings[name]

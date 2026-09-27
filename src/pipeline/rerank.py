@@ -13,6 +13,9 @@ def run_reranking(run_dir, *, reranker=None):
     run_dir = Path(run_dir)
     if (run_dir / "reranked.jsonl").exists():
         raise FileExistsError(run_dir / "reranked.jsonl")
+    if (run_dir / "manifest.json").exists():
+        from src.pipeline.handoff import validate_reranking_input
+        validate_reranking_input(run_dir)
     config = load_config(run_dir / "config.yaml")
     logger = run_logger(run_dir, config)
     queries = {row["id"]: row["text"] for row in read_json(run_dir / "queries.json")}

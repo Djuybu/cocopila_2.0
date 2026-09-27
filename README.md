@@ -18,6 +18,7 @@ configs/
   data/                  # Raw preparation + prepared dataset paths
   retrieval/             # BM25, BGE-M3, fusion
   reranker/              # BGE cross-encoder
+  handoff/               # Portable P1 → P2 candidate export
   experiments/           # exp000 BM25, exp001 dense, exp002 hybrid, exp003 full
 data/
   raw/{prototype,competition}/
@@ -174,9 +175,33 @@ Run đã tồn tại sẽ báo lỗi; chạy lại với `--run-name p1_bge_repe
 Preparation chạy lại cần output/mappings version mới. Adapter cho triplet thật
 có config riêng `configs/data/prototype_triplets.yaml`; schema nằm ở
 [docs/schemas/prototype_records.json](docs/schemas/prototype_records.json).
-Các công việc reranking/scoring P1-11 trở đi không nằm trong batch P1 này.
+Các công việc reranking/scoring của Người 2 không nằm trong batch retrieval này.
 Kết quả, số đo tài nguyên và giới hạn chi tiết:
 [docs/p1_retrieval_results.md](docs/p1_retrieval_results.md).
+
+## P1-11: bàn giao cho Người 2
+
+Xuất từ benchmark đã có, không chạy lại retrieval:
+
+```bash
+python scripts/export_reranking_input.py --config configs/handoff/p1_to_p2.yaml
+python scripts/validate_reranking_input.py --run-dir outputs/p1_p2_handoff
+```
+
+Tạo `outputs/p1_p2_handoff.zip` với candidate schema cố định, query text, weak
+labels, registry, portable reranker config và manifest SHA256. Gói hiện tại có
+7 queries/1.400 RRF candidates; giữ nguyên ID/text/rank/score nguồn. ZIP bị Git
+ignore, cần chuyển riêng cho Người 2. Sau khi giải nén, Người 2 chạy:
+
+```bash
+python -m pip install -e ".[dense,test]"
+python scripts/run_reranking.py --run-dir outputs/p1_p2_handoff
+```
+
+Không cần corpus/index trên máy gửi. Đây là input cho P2-01, **không phải nhãn
+hay ID chính thức của cuộc thi**, và model reranker thật chưa được benchmark
+trong P1-11. Hướng dẫn và contract:
+[docs/p1_p2_handoff.md](docs/p1_p2_handoff.md).
 
 ## Run BM25 baseline
 

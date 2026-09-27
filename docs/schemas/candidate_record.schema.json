@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "medical-rag-candidates-v1 JSONL query record",
+  "description": "One query record per line; query text is in queries.json. Unavailable source evidence is null, not fabricated. Extra original metadata is retained.",
+  "type": "object",
+  "required": ["id", "candidates"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "candidates": {"type": "array", "items": {"$ref": "#/$defs/candidate"}}
+  },
+  "$defs": {
+    "sourceRank": {"type": ["integer", "null"], "minimum": 1},
+    "sourceScore": {"type": ["number", "null"]},
+    "candidate": {
+      "type": "object",
+      "required": ["query_id", "chunk_id", "doc_id", "text", "rank", "score", "source", "bm25_rank", "bm25_score", "dense_rank", "dense_score", "fused_score", "source_ranks", "source_scores"],
+      "properties": {
+        "query_id": {"type": "string", "minLength": 1},
+        "chunk_id": {"type": "string", "minLength": 1},
+        "doc_id": {"type": "string", "minLength": 1},
+        "text": {"type": "string", "minLength": 1},
+        "rank": {"type": "integer", "minimum": 1},
+        "score": {"type": "number"},
+        "source": {"type": "string", "minLength": 1},
+        "bm25_rank": {"$ref": "#/$defs/sourceRank"},
+        "bm25_score": {"$ref": "#/$defs/sourceScore"},
+        "dense_rank": {"$ref": "#/$defs/sourceRank"},
+        "dense_score": {"$ref": "#/$defs/sourceScore"},
+        "fused_score": {"$ref": "#/$defs/sourceScore"},
+        "source_ranks": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+        "source_scores": {"type": "object", "additionalProperties": {"type": "number"}}
+      }
+    }
+  }
+}

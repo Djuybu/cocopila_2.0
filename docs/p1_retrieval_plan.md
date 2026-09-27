@@ -1,4 +1,4 @@
-# Mai Ngọc Duy — P1-01 through P1-10
+# Mai Ngọc Duy — P1-01 through P1-11
 
 Source: [assignment spreadsheet](https://docs.google.com/spreadsheets/d/1TVLcExMp1hzgH6uq4aMBZA1XiqY4hbJ0fmDD0_Rylj0/edit).
 The Checklist tab explicitly assigns P1-01…P1-17 to Mai Ngọc Duy. The overview's
@@ -17,6 +17,11 @@ take precedence. No remote sheet is edited.
 | P1-08 | Union with source rank/score provenance | fusion union keeps all named source evidence |
 | P1-09 | RRF k sweep; stable ranking and union comparison | benchmark run variants and comparable recall reports |
 | P1-10 | Chunk/doc Recall@20/50/100/200 + misses | evaluate_retrieval.py; per-query and aggregate reports |
+| P1-11 | Fixed candidates schema for Person 2 | src/retrieval/schema.py; portable export + validation in src/pipeline/handoff.py |
+
+P1-11 was requested separately after P1-01…P1-10. Its contract, receiving
+instructions and weak-label limitations are in [p1_p2_handoff.md](p1_p2_handoff.md).
+Person 2's P2-01 model inference remains separate work.
 
 The requested data source is Henrychur/MMedC, limited to Chinese, English,
 Japanese and French. Its dataset card identifies a pretraining TXT corpus, not
