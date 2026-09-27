@@ -35,6 +35,22 @@ JSON, JSONL and optionally Parquet inputs are supported. Preparation does not
 silently segment, normalize, deduplicate, rechunk or split the dataset.
 Optional data.splits.<name>.data_path inputs are checked for document leakage.
 
+The opt-in triplet path in `src/data/prototype.py` deduplicates normalized
+query/positive pairs (NFC and whitespace as identity keys, original text kept),
+merges negatives and removes contradictory positives-as-negatives. It records
+every source row reference. Same text in different parent documents retains both
+parents and joins their split component rather than discarding provenance.
+Shared titles, duplicate content, duplicate queries and multi-positive queries
+must stay in one split component. Seeded assignment happens on these components;
+cross-split negative references are removed and counted.
+
+The separately approved MMedC path streams bounded TXT prefixes out of language
+ZIP archives. It creates explicitly namespaced prototype IDs and weak
+adjacent-span labels, excluding query characters from candidate chunks. Local
+ZIPs are size/SHA256 verified; remote sampling records archive revision/hash,
+member name/CRC and sampled byte-prefix hash. No archive-wide extraction,
+medical normalization or invented organizer IDs is performed.
+
 A retriever returns dictionaries containing chunk_id, doc_id, score (float),
 rank (one-based integer), source; text and metadata are retained. BM25 index
 snapshots store corpus plus tokenizer/algorithm parameters in JSON, rebuilding
@@ -56,6 +72,8 @@ compared. Repeated chunk IDs in one source count once. Conflicting document IDs
 for the same chunk are rejected. CC min-max normalizes each source before applying
 alpha * dense + (1-alpha) * BM25. Constant-score lists normalize to zero.
 Union mode retains first appearance and is order-based, not score-comparable.
+Named union/RRF outputs additionally retain `source_ranks`, `source_scores` and
+flat `bm25_rank`, `bm25_score`, `dense_rank`, `dense_score` when present.
 
 ## Reranking and selection
 
@@ -93,6 +111,16 @@ Evaluation requires identical query coverage in predictions and ground truth.
 
 These are explicit local conventions. Confirm them against the actual
 competition rules before treating the metric as an official leaderboard score.
+
+`candidate_recall.py` is a separate before-reranking harness: both chunk and
+document Recall@K use the first K unique official chunks as the common budget.
+It saves per-query recall, missing IDs and fully missed query lists. This is
+distinct from document ranking metrics on already aggregated document lists.
+The benchmark runner compares independent source rankings, first-appearance
+union and RRF k sweeps on exactly one corpus/query/label fingerprint. It measures
+uncached retrieval after warmup and separately records index/startup/inference
+RAM/VRAM. Caches bind to corpus, config, query and K; cache lookup times must not
+be presented as model inference speed. Weak labels propagate into every report.
 
 ## State and reproducibility
 

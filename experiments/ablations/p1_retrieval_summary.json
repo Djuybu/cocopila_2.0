@@ -1,0 +1,838 @@
+{
+  "owner": "Mai Ngọc Duy",
+  "scope": "P1-01 through P1-10, Person 1",
+  "label_quality": "weak_adjacent_span",
+  "warning": "Not human relevance labels or official competition scores. Seven validation queries; no reliable model-quality conclusion.",
+  "dataset": {
+    "source": {
+      "repo": "Henrychur/MMedC",
+      "revision": "6629f0a54ae73b6f32d42476b2b9e90ff96035fd",
+      "languages": [
+        "chinese",
+        "english",
+        "japanese",
+        "french"
+      ],
+      "files": [
+        {
+          "path": "Chinese.zip",
+          "size": 4593685085,
+          "sha256": "c937ffd601727d5d687502504f78f60b1c18cb9b22049c13b088d4aa5b429870"
+        },
+        {
+          "path": "English.zip",
+          "size": 11407910047,
+          "sha256": "9af8aa6ba405ea4c3755b73117d1bb7ee242150233b52d69a996007a094a7525"
+        },
+        {
+          "path": "French.zip",
+          "size": 2962398707,
+          "sha256": "3c116ff224c94e510bf1159b16d2a863aa6cb60f5d8ca41f4a0a3cfa0c9ceace"
+        },
+        {
+          "path": "Japanese.zip",
+          "size": 2027039166,
+          "sha256": "c81a511674050b8bc239bc245f07891eb63de19a9a574faaf7f5da56a7b047ca"
+        }
+      ]
+    },
+    "documents": 64,
+    "chunks": 1024,
+    "queries": 64,
+    "sample_seed": 42,
+    "split_seed": 1,
+    "splits": {
+      "train": 51,
+      "val": 7,
+      "test": 6
+    },
+    "validation_languages": {
+      "chinese": 1,
+      "english": 3,
+      "japanese": 1,
+      "french": 2
+    },
+    "fingerprints": {
+      "corpus_fingerprint": "ad0b3cc77011c53b51ea6090f6c143536eae2d2c21f366b7f14898605dcbe8ac",
+      "queries_fingerprint": "763a4e18a0a5f2006cf56f8016842e5a7048ef409aa16004d8451358df614d7f",
+      "labels_fingerprint": "9ac23a70805560d5e0df4b31e27b0cb9bef45ba3ef78258cd0cee2f0932b3999"
+    }
+  },
+  "environment": {
+    "python": "3.14.4",
+    "gpu": "RTX 3050 Laptop 4GB",
+    "versions": {
+      "torch": "2.14.0",
+      "transformers": "5.17.0",
+      "sentence-transformers": "6.1.0",
+      "qdrant-client": "1.19.1",
+      "numpy": "2.5.3",
+      "rank-bm25": "0.2.2",
+      "psutil": "7.2.2"
+    }
+  },
+  "code_provenance": {
+    "base_commit": "34d6aaec39b8edbfbf5bdebb8ec331c2a597837c",
+    "p1_changes_uncommitted_at_measurement": true
+  },
+  "document_budget": "Parents of first K unique chunks, not first K unique documents",
+  "timing": "Uncached compute, warmup excluded, CUDA synchronized; 7 samples on a shared machine",
+  "provisional_baseline": "BM25+BGE-M3 cosine RRF k=60 for candidate budget 100/200. E5 has better weak R@50; repeat on real qrels before choosing.",
+  "runs": {
+    "p1_bm25_fourlang": {
+      "model": "BM25",
+      "revision": null,
+      "distance": null,
+      "max_seq_length": null,
+      "dtype": null,
+      "top_k_per_source": 200,
+      "profiles": {
+        "index_build": {
+          "wall_seconds": 0.013795392000247375,
+          "peak_process_rss_bytes": 31731712,
+          "peak_cuda_allocated_bytes": null,
+          "peak_cuda_reserved_bytes": null,
+          "memory_scope": "sampled_process_rss_and_torch_cuda_allocator"
+        },
+        "model_startup_and_warmup": {
+          "wall_seconds": 0.46266956699946604,
+          "peak_process_rss_bytes": 90091520,
+          "peak_cuda_allocated_bytes": null,
+          "peak_cuda_reserved_bytes": null,
+          "memory_scope": "sampled_process_rss_and_torch_cuda_allocator"
+        },
+        "retrieval": {
+          "wall_seconds": 0.20873170499999105,
+          "peak_process_rss_bytes": 90718208,
+          "peak_cuda_allocated_bytes": null,
+          "peak_cuda_reserved_bytes": null,
+          "memory_scope": "sampled_process_rss_and_torch_cuda_allocator"
+        },
+        "cache_hits": 0,
+        "retriever_calls": 7
+      },
+      "methods": {
+        "bm25": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.022305613857237665,
+            "latency_seconds_p50": 0.013367726999604201,
+            "latency_seconds_p95": 0.050577557999531564,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": null
+        }
+      },
+      "output_path": "outputs/p1_bm25_fourlang"
+    },
+    "p1_bge_m3_fourlang": {
+      "model": "BAAI/bge-m3",
+      "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+      "distance": "cosine",
+      "max_seq_length": 512,
+      "dtype": "float16",
+      "top_k_per_source": 200,
+      "profiles": {
+        "index_build": {
+          "wall_seconds": 294.1934873800001,
+          "peak_process_rss_bytes": 4319084544,
+          "peak_cuda_allocated_bytes": 1155703808,
+          "peak_cuda_reserved_bytes": 1170210816,
+          "memory_scope": "sampled_process_rss_and_torch_cuda_allocator"
+        },
+        "model_startup_and_warmup": {
+          "wall_seconds": 7.790867478000109,
+          "peak_process_rss_bytes": 5270573056,
+          "peak_cuda_allocated_bytes": 1148954624,
+          "peak_cuda_reserved_bytes": 1166016512,
+          "memory_scope": "sampled_process_rss_and_torch_cuda_allocator"
+        },
+        "retrieval": {
+          "wall_seconds": 1.3875002529994163,
+          "peak_process_rss_bytes": 2712182784,
+          "peak_cuda_allocated_bytes": 1148954624,
+          "peak_cuda_reserved_bytes": 1166016512,
+          "memory_scope": "sampled_process_rss_and_torch_cuda_allocator"
+        },
+        "cache_hits": 0,
+        "retriever_calls": 14
+      },
+      "methods": {
+        "bm25": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.02270908185710141,
+            "latency_seconds_p50": 0.013633212000058847,
+            "latency_seconds_p95": 0.05119163200015464,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": null
+        },
+        "dense": {
+          "macro": {
+            "chunks": {
+              "recall@20": 0.8571428571428571,
+              "recall@50": 0.8571428571428571,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 0.8571428571428571,
+              "recall@50": 0.8571428571428571,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.06943437242859675,
+            "latency_seconds_p50": 0.051806216999466415,
+            "latency_seconds_p95": 0.13284724700042716,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": null
+        },
+        "union": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.09312289428583297,
+            "latency_seconds_p50": 0.06630117599979712,
+            "latency_seconds_p95": 0.18488962500123307,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": null
+        },
+        "rrf_k20": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.09369011114306756,
+            "latency_seconds_p50": 0.0670027129999653,
+            "latency_seconds_p95": 0.1855300890001672,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": {
+            "chunks": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            },
+            "documents": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            }
+          }
+        },
+        "rrf_k60": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.09347886914292758,
+            "latency_seconds_p50": 0.06724281799961318,
+            "latency_seconds_p95": 0.18539451000106055,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": {
+            "chunks": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            },
+            "documents": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            }
+          }
+        },
+        "rrf_k100": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.09348590814274108,
+            "latency_seconds_p50": 0.06700073199954204,
+            "latency_seconds_p95": 0.18535919199985074,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": {
+            "chunks": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            },
+            "documents": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            }
+          }
+        }
+      },
+      "output_path": "outputs/p1_bge_m3_fourlang"
+    },
+    "p1_e5_fourlang": {
+      "model": "intfloat/multilingual-e5-large",
+      "revision": "3d7cfbdacd47fdda877c5cd8a79fbcc4f2a574f3",
+      "distance": "cosine",
+      "max_seq_length": 512,
+      "dtype": "float16",
+      "top_k_per_source": 200,
+      "profiles": {
+        "index_build": {
+          "wall_seconds": 338.76431349000086,
+          "peak_process_rss_bytes": 4267499520,
+          "peak_cuda_allocated_bytes": 1140597760,
+          "peak_cuda_reserved_bytes": 1151336448,
+          "memory_scope": "sampled_process_rss_and_torch_cuda_allocator"
+        },
+        "model_startup_and_warmup": {
+          "wall_seconds": 27.1847708589994,
+          "peak_process_rss_bytes": 4127272960,
+          "peak_cuda_allocated_bytes": 1133461504,
+          "peak_cuda_reserved_bytes": 1147142144,
+          "memory_scope": "sampled_process_rss_and_torch_cuda_allocator"
+        },
+        "retrieval": {
+          "wall_seconds": 2.8569774869993125,
+          "peak_process_rss_bytes": 2830024704,
+          "peak_cuda_allocated_bytes": 1133461504,
+          "peak_cuda_reserved_bytes": 1147142144,
+          "memory_scope": "sampled_process_rss_and_torch_cuda_allocator"
+        },
+        "cache_hits": 0,
+        "retriever_calls": 14
+      },
+      "methods": {
+        "bm25": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.023900425571420265,
+            "latency_seconds_p50": 0.017294437000600738,
+            "latency_seconds_p95": 0.05309550899983151,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": null
+        },
+        "dense": {
+          "macro": {
+            "chunks": {
+              "recall@20": 0.8571428571428571,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 0.8571428571428571,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.09167585185709218,
+            "latency_seconds_p50": 0.07710505700015347,
+            "latency_seconds_p95": 0.190433697998742,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": null
+        },
+        "union": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.11662413542840763,
+            "latency_seconds_p50": 0.09331883499908145,
+            "latency_seconds_p95": 0.20408211399808351,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": null
+        },
+        "rrf_k20": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.11724408328570592,
+            "latency_seconds_p50": 0.09370067499912693,
+            "latency_seconds_p95": 0.20487576999767043,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": {
+            "chunks": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            },
+            "documents": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            }
+          }
+        },
+        "rrf_k60": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.11702325428606335,
+            "latency_seconds_p50": 0.0937124469983246,
+            "latency_seconds_p95": 0.20484049299921026,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": {
+            "chunks": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            },
+            "documents": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            }
+          }
+        },
+        "rrf_k100": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.11681982800005894,
+            "latency_seconds_p50": 0.09352480899906368,
+            "latency_seconds_p95": 0.2045352789991739,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": {
+            "chunks": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            },
+            "documents": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            }
+          }
+        }
+      },
+      "output_path": "outputs/p1_e5_fourlang"
+    },
+    "p1_bge_dot_fourlang": {
+      "model": "BAAI/bge-m3",
+      "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+      "distance": "dot",
+      "max_seq_length": 512,
+      "dtype": "float16",
+      "top_k_per_source": 200,
+      "profiles": {
+        "index_build": {
+          "wall_seconds": 300.78751350700077,
+          "peak_process_rss_bytes": 4297154560,
+          "peak_cuda_allocated_bytes": 1155703808,
+          "peak_cuda_reserved_bytes": 1170210816,
+          "memory_scope": "sampled_process_rss_and_torch_cuda_allocator"
+        },
+        "model_startup_and_warmup": {
+          "wall_seconds": 4.455945920000886,
+          "peak_process_rss_bytes": 5167570944,
+          "peak_cuda_allocated_bytes": 1148954624,
+          "peak_cuda_reserved_bytes": 1166016512,
+          "memory_scope": "sampled_process_rss_and_torch_cuda_allocator"
+        },
+        "retrieval": {
+          "wall_seconds": 0.8544274169998971,
+          "peak_process_rss_bytes": 2842337280,
+          "peak_cuda_allocated_bytes": 1148954624,
+          "peak_cuda_reserved_bytes": 1166016512,
+          "memory_scope": "sampled_process_rss_and_torch_cuda_allocator"
+        },
+        "cache_hits": 0,
+        "retriever_calls": 14
+      },
+      "methods": {
+        "bm25": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.024408500714084118,
+            "latency_seconds_p50": 0.01387097599945264,
+            "latency_seconds_p95": 0.059974284000418265,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": null
+        },
+        "dense": {
+          "macro": {
+            "chunks": {
+              "recall@20": 0.8571428571428571,
+              "recall@50": 0.8571428571428571,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 0.8571428571428571,
+              "recall@50": 0.8571428571428571,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.07367467857121872,
+            "latency_seconds_p50": 0.06922260700048355,
+            "latency_seconds_p95": 0.13782599899968773,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": null
+        },
+        "union": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.09911495414235105,
+            "latency_seconds_p50": 0.08365086799858545,
+            "latency_seconds_p95": 0.19897022800068953,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": null
+        },
+        "rrf_k20": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.09980970414237943,
+            "latency_seconds_p50": 0.08440464900013467,
+            "latency_seconds_p95": 0.19972180500008108,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": {
+            "chunks": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            },
+            "documents": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            }
+          }
+        },
+        "rrf_k60": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.0994850025713926,
+            "latency_seconds_p50": 0.0839171070001612,
+            "latency_seconds_p95": 0.19929277499977616,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": {
+            "chunks": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            },
+            "documents": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            }
+          }
+        },
+        "rrf_k100": {
+          "macro": {
+            "chunks": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            },
+            "documents": {
+              "recall@20": 1.0,
+              "recall@50": 1.0,
+              "recall@100": 1.0,
+              "recall@200": 1.0
+            }
+          },
+          "performance": {
+            "latency_seconds_mean": 0.09940762271409247,
+            "latency_seconds_p50": 0.08390347000022302,
+            "latency_seconds_p95": 0.199255063000237,
+            "includes_model_startup": false,
+            "cache_enabled": true,
+            "timing_mode": "uncached_compute"
+          },
+          "miss_all_chunk_queries": [],
+          "comparison_to_union": {
+            "chunks": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            },
+            "documents": {
+              "recall@20": 0.0,
+              "recall@50": 0.0,
+              "recall@100": 0.0,
+              "recall@200": 0.0
+            }
+          }
+        }
+      },
+      "output_path": "outputs/p1_bge_dot_fourlang"
+    }
+  }
+}

@@ -8,7 +8,7 @@ Baseline BM25 chạy trên CPU. Dense dùng BGE-M3 + Qdrant; reranking dùng
 bge-reranker-v2-m3. Model được nạp khi cần. Generation bằng Qwen, multilingual và
 các interface preprocessing cũ được giữ lại nhưng chưa triển khai.
 
-Repo chưa chứa dataset hoặc model weights. Các lệnh dưới đây cần dữ liệu đầu vào
+Dataset và model weights không được đưa vào Git. Các lệnh dưới đây cần dữ liệu đầu vào
 theo schema mô tả; tests có corpus nhỏ riêng để kiểm tra pipeline.
 
 ## Repository structure
@@ -72,6 +72,8 @@ python -m pip install -e ".[dense]"
 requirements.txt giữ các dependencies đầy đủ của thiết kế RAG cũ, gồm generation;
 không cần cài toàn bộ để chạy BM25 competition baseline.
 
+Benchmark có đo RAM: `python -m pip install -e ".[dense,benchmark,test]"`.
+
 Cài editable package là bước bắt buộc trước khi gọi scripts. Không sửa sys.path.
 Các lệnh ví dụ chạy tại repository root; dùng đường dẫn tuyệt đối cho --config
 hoặc --run-dir nếu gọi từ nơi khác.
@@ -121,6 +123,60 @@ records chứa doc_id để kiểm tra leakage theo document.
 Competition preparation dùng configs/data/competition.yaml. Sau đó tạo experiment
 config trỏ đến processed/competition và mappings/competition; không tự dùng
 prototype index cho corpus mới.
+
+## P1-01–P1-10: MMedC weak-label prototype
+
+Phần của **Mai Ngọc Duy (Người 1)**: [task mapping](docs/p1_retrieval_plan.md).
+MMedC chỉ có corpus TXT pretraining, không có retrieval qrels. Theo lựa chọn của
+người dùng, prototype dùng 180 ký tự đầu làm query, span tiếp theo làm positive
+yếu. Query span bị loại khỏi tất cả chunks. Đây **không phải nhãn relevance thật,
+F2 của cuộc thi, hoặc bằng chứng model nào tốt hơn**. ID `prototype_*` không phải
+ID chính thức của BTC và không được dùng để nộp bài thật.
+
+```bash
+python scripts/download_mmedc.py --config configs/data/mmedc_download.yaml
+python scripts/prepare_data.py --config configs/data/mmedc_prototype.yaml
+python scripts/benchmark_retrieval.py --config configs/experiments/p1_bm25.yaml
+python scripts/benchmark_retrieval.py --config configs/experiments/p1_bge_m3.yaml
+python scripts/benchmark_retrieval.py --config configs/experiments/p1_e5.yaml
+python scripts/benchmark_retrieval.py --config configs/experiments/p1_bge_dot.yaml
+```
+
+Downloader chỉ lấy Chinese/English/Japanese/French, pin revision và kiểm tra
+size/SHA256. Range fragments có resume; raw ZIP giữ nguyên, không giải nén toàn
+bộ corpus. Preparation có thể đọc bounded HTTP ranges nếu ZIP còn đang tải.
+Mẫu giới hạn 16 documents/ngôn ngữ, tối đa 8.000 ký tự/document; seed lấy mẫu 42,
+split seed 1 cho validation có đủ 4 ngôn ngữ. Split theo document/components,
+không theo từng row. Corpus dùng chung cho BM25/BGE/E5; không có fine-tuning.
+
+Các benchmark tự build index còn thiếu; dense chạy GPU FP16 batch=1, max 512
+tokens để vừa GPU 4GB và giữ cùng giới hạn giữa BGE-M3/E5. BGE không thêm prefix;
+E5 dùng `query: ` và `passage: `. BM25 prototype bật `unicode_cjk`; mặc định cũ
+vẫn là whitespace. Union giữ rank/score từng nguồn, RRF sweep k=20/60/100.
+
+```bash
+python scripts/evaluate_retrieval.py \
+  --candidates outputs/p1_bge_m3_fourlang/rrf_k60/candidates.jsonl \
+  --labels data/processed/mmedc_p1_fourlang/splits/val/labels.json \
+  --registry outputs/p1_bge_m3_fourlang/registry.json \
+  --output-dir outputs/p1_candidate_recall \
+  --ks 20 50 100 200
+```
+
+Mỗi run ghi config, registry, candidates từng method, per-query/macro chunk/doc
+recall, query bị miss hoàn toàn, latency mean/p50/p95, RAM/VRAM theo từng phase,
+corpus/query/label fingerprints và experiment CSV. Document Recall@K là recall
+parent docs của **K chunks đầu**, không phải K docs riêng biệt. Latency mặc định
+đo uncached inference sau warmup; kết quả vẫn lưu vào retrieval cache. RAM là
+process RSS sampled, VRAM là torch allocator (không phải toàn bộ GPU).
+
+Run đã tồn tại sẽ báo lỗi; chạy lại với `--run-name p1_bge_repeat01`, không ghi đè.
+Preparation chạy lại cần output/mappings version mới. Adapter cho triplet thật
+có config riêng `configs/data/prototype_triplets.yaml`; schema nằm ở
+[docs/schemas/prototype_records.json](docs/schemas/prototype_records.json).
+Các công việc reranking/scoring P1-11 trở đi không nằm trong batch P1 này.
+Kết quả, số đo tài nguyên và giới hạn chi tiết:
+[docs/p1_retrieval_results.md](docs/p1_retrieval_results.md).
 
 ## Run BM25 baseline
 
