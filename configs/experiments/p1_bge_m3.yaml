@@ -1,0 +1,2 @@
+extends: p1_benchmark_base.yaml
+run_name: p1_bge_m3_fourlang

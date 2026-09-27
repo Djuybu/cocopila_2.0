@@ -1,0 +1,10 @@
+data:
+  format: triplets
+  source_path: ../../data/raw/prototype/triplets.jsonl
+  raw_dir: ../../data/raw
+  output_dir: ../../data/processed/triplet_prototype
+  mappings_dir: ../../data/mappings/triplet_prototype
+  namespace: triplet_prototype
+  require_document_metadata: true
+  seed: 42
+  split_ratios: {train: 0.8, val: 0.1, test: 0.1}

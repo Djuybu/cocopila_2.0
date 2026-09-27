@@ -1,0 +1,52 @@
+extends:
+  - ../data/mmedc_prepared.yaml
+  - ../retrieval/bm25.yaml
+  - ../retrieval/dense_bge_m3.yaml
+  - ../retrieval/hybrid_rrf.yaml
+# Reapply prepared corpus after inherited baseline paths.
+data:
+  documents_path: ../../data/processed/mmedc_p1_fourlang/documents.json
+  chunks_path: ../../data/processed/mmedc_p1_fourlang/chunk_corpus.jsonl
+  queries_path: ../../data/processed/mmedc_p1_fourlang/splits/val/queries.json
+  mappings_dir: ../../data/mappings/mmedc_p1_fourlang
+  manifest_path: ../../data/processed/mmedc_p1_fourlang/dataset_manifest.json
+  split: val
+output_dir: ../../outputs
+retrieval:
+  bm25:
+    enabled: true
+    index_path: ../../artifacts/indexes/bm25/mmedc_p1_fourlang_unicode.json
+    top_k: 200
+    lowercase: true
+    tokenizer: unicode_cjk
+  dense:
+    enabled: true
+    model: BAAI/bge-m3
+    revision: 5617a9f61b028005a4858fdac845db406aefb181
+    model_dtype: float16
+    model_cache_dir: ../../artifacts/cache/huggingface
+    index_dir: ../../artifacts/indexes/dense/mmedc_fourlang_bge_cosine
+    collection: mmedc_chunks
+    device: cuda
+    max_seq_length: 512
+    batch_size: 1
+    query_prefix: ""
+    document_prefix: ""
+    distance: cosine
+    normalize_embeddings: true
+    top_k: 200
+fusion:
+  method: rrf
+  top_k: 200
+retrieval_cache:
+  enabled: true
+  cache_dir: ../../artifacts/cache/retrieval
+benchmark:
+  owner: Mai Ngọc Duy
+  labels_path: ../../data/processed/mmedc_p1_fourlang/splits/val/labels.json
+  cutoffs: [20, 50, 100, 200]
+  rrf_constants: [20, 60, 100]
+  build_indexes_if_missing: true
+  warmup: true
+  measure_uncached: true
+  experiment_log_path: ../../experiments/retrieval_benchmark_log.csv

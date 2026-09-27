@@ -1,0 +1,6 @@
+extends: p1_benchmark_base.yaml
+run_name: p1_bge_dot_fourlang
+retrieval:
+  dense:
+    distance: dot
+    index_dir: ../../artifacts/indexes/dense/mmedc_fourlang_bge_dot

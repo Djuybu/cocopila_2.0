@@ -10,6 +10,7 @@ from src.data.loader import load_records
 from src.data.schema import validate_corpus
 from src.retrieval.bm25 import BM25Retriever
 from src.retrieval.candidate_generator import CandidateGenerator
+from src.retrieval.cache import CachedRetriever
 from src.submission.validator import SubmissionValidator
 from src.utils.config import run_directory
 from src.utils.io import read_json, write_json, write_jsonl
@@ -43,22 +44,25 @@ def build_bm25_index(config):
     chunks, _, _ = load_dataset(config)
     cfg = config["retrieval"]["bm25"]
     retriever = BM25Retriever(k1=cfg["k1"], b=cfg["b"], epsilon=cfg["epsilon"],
-                              lowercase=cfg["lowercase"], text_key=cfg["text_key"])
+                              lowercase=cfg["lowercase"], text_key=cfg["text_key"],
+                              tokenizer=cfg.get("tokenizer", "whitespace"))
     retriever.build_index(chunks)
     retriever.save_index(cfg["index_path"])
     return cfg["index_path"]
 
 
 def build_dense_index(config):
+    import gc
+    import logging
+    import sys
     from src.data.indexer import QdrantIndexer
     from src.retrieval.dense import DenseRetriever
     chunks, _, _ = load_dataset(config)
     cfg = config["retrieval"]["dense"]
     path = Path(cfg["index_dir"])
     path.mkdir(parents=True, exist_ok=False)
-    retriever = DenseRetriever(cfg["model"], cfg["device"], query_prefix=cfg["query_prefix"],
-                               max_seq_length=cfg["max_seq_length"])
-    indexer = QdrantIndexer(path, cfg["collection"], cfg["dimension"])
+    retriever = configured_dense(cfg)
+    indexer = QdrantIndexer(path, cfg["collection"], cfg["dimension"], distance=cfg.get("distance", "cosine"))
     try:
         indexer.create_collection()
         batch_size = cfg["batch_size"]
@@ -66,15 +70,41 @@ def build_dense_index(config):
             raise ValueError("batch_size must be positive")
         for start in range(0, len(chunks), batch_size):
             batch = chunks[start:start + batch_size]
-            vectors = retriever.encode_documents([row[cfg["text_key"]] for row in batch], batch_size)
+            vectors = retriever.encode_documents([row[cfg["text_key"]] for row in batch], batch_size,
+                                                show_progress=cfg.get("show_progress", False))
             indexer.index_documents(batch, vectors, batch_size)
-        write_json(path / "metadata.json", {
-            "model": cfg["model"], "dimension": cfg["dimension"], "text_key": cfg["text_key"],
-            "max_seq_length": cfg["max_seq_length"], "corpus_fingerprint": corpus_fingerprint(chunks),
-        })
+            if start // batch_size % 100 == 0:
+                logging.info("dense index: %d/%d chunks", min(start + batch_size, len(chunks)), len(chunks))
+        write_json(path / "metadata.json", dense_metadata(cfg, chunks))
     finally:
         indexer.client.close()
+        del retriever
+        gc.collect()
+        torch = sys.modules.get("torch")
+        if torch is not None and torch.cuda.is_available():
+            torch.cuda.empty_cache()
     return str(path)
+
+
+def configured_dense(cfg, client=None):
+    from src.retrieval.dense import DenseRetriever
+    return DenseRetriever(
+        cfg["model"], cfg["device"], client=client, collection_name=cfg["collection"],
+        query_prefix=cfg["query_prefix"], document_prefix=cfg.get("document_prefix", ""),
+        normalize_embeddings=cfg.get("normalize_embeddings", True),
+        max_seq_length=cfg["max_seq_length"], batch_size=cfg["batch_size"],
+        revision=cfg.get("revision"), model_cache_dir=cfg.get("model_cache_dir"),
+        model_dtype=cfg.get("model_dtype"))
+
+
+def dense_metadata(cfg, chunks):
+    return {
+        "model": cfg["model"], "dimension": cfg["dimension"], "text_key": cfg["text_key"],
+        "max_seq_length": cfg["max_seq_length"], "corpus_fingerprint": corpus_fingerprint(chunks),
+        "distance": cfg.get("distance", "cosine"), "document_prefix": cfg.get("document_prefix", ""),
+        "normalize_embeddings": cfg.get("normalize_embeddings", True), "revision": cfg.get("revision"),
+        "model_dtype": cfg.get("model_dtype"),
+    }
 
 
 def create_generator(config, chunks, stack):
@@ -89,21 +119,25 @@ def create_generator(config, chunks, stack):
             for parameter in ("k1", "b", "epsilon", "lowercase", "text_key"):
                 if getattr(retriever, parameter) != cfg[parameter]:
                     raise ValueError(f"BM25 index/config mismatch: {parameter}; rebuild into a new index")
+            if retriever.tokenizer != cfg.get("tokenizer", "whitespace"):
+                raise ValueError("BM25 tokenizer mismatch; rebuild into a new index")
         elif name == "dense":
             from qdrant_client import QdrantClient
-            from src.retrieval.dense import DenseRetriever
             metadata = read_json(Path(cfg["index_dir"]) / "metadata.json")
-            expected = {"model": cfg["model"], "dimension": cfg["dimension"], "text_key": cfg["text_key"],
-                        "max_seq_length": cfg["max_seq_length"], "corpus_fingerprint": corpus_fingerprint(chunks)}
-            if metadata != expected:
+            expected = dense_metadata(cfg, chunks)
+            legacy_defaults = {"distance": "cosine", "document_prefix": "", "normalize_embeddings": True,
+                               "revision": None, "model_dtype": None}
+            if {**legacy_defaults, **metadata} != expected:
                 raise ValueError("Dense index/config or corpus mismatch; rebuild into a new index")
             client = QdrantClient(path=cfg["index_dir"])
             stack.callback(client.close)
-            retriever = DenseRetriever(cfg["model"], cfg["device"], client=client,
-                                       collection_name=cfg["collection"], query_prefix=cfg["query_prefix"],
-                                       max_seq_length=cfg["max_seq_length"])
+            retriever = configured_dense(cfg, client)
         else:
             raise NotImplementedError(f"Retriever {name} is not implemented")
+        cache = config.get("retrieval_cache", {})
+        if cache.get("enabled", False):
+            retriever = CachedRetriever(retriever, cache["cache_dir"],
+                                         {"source": name, "config": cfg, "corpus": corpus_fingerprint(chunks)})
         retrievers[name] = (retriever, cfg["top_k"])
     fusion = config["fusion"]
     return CandidateGenerator(retrievers, method=fusion["method"],

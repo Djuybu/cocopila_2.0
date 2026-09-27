@@ -1,4 +1,26 @@
 """Validate corpus identity before indexing or producing official mappings."""
+from typing import TypedDict
+
+
+class RecordMetadata(TypedDict, total=False):
+    query_id: str
+    title: str
+    metadata: dict
+
+
+class Query(RecordMetadata):
+    id: str
+    text: str
+
+
+class Document(RecordMetadata):
+    doc_id: str
+
+
+class Chunk(RecordMetadata):
+    chunk_id: str
+    doc_id: str
+    text: str
 
 
 def unique_ids(rows, key):

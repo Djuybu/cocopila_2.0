@@ -3,12 +3,15 @@ from uuid import uuid5, NAMESPACE_URL
 
 
 class QdrantIndexer:
-    def __init__(self, qdrant_path, collection_name, embedding_dim=1024, *, client=None):
+    def __init__(self, qdrant_path, collection_name, embedding_dim=1024, *, client=None, distance="cosine"):
         if client is None:
             from qdrant_client import QdrantClient
             client = QdrantClient(path=str(qdrant_path))
         self.client, self.collection_name = client, collection_name
         self.embedding_dim = embedding_dim
+        if distance not in {"cosine", "dot"}:
+            raise ValueError("Distance must be cosine or dot")
+        self.distance = distance
 
     def create_collection(self, recreate=False):
         from qdrant_client import models
@@ -19,7 +22,8 @@ class QdrantIndexer:
             self.client.delete_collection(self.collection_name)
         self.client.create_collection(
             collection_name=self.collection_name,
-            vectors_config=models.VectorParams(size=self.embedding_dim, distance=models.Distance.COSINE),
+            vectors_config=models.VectorParams(size=self.embedding_dim, distance=(
+                models.Distance.COSINE if self.distance == "cosine" else models.Distance.DOT)),
             hnsw_config=models.HnswConfigDiff(m=16, ef_construct=200),
             quantization_config=models.ScalarQuantization(
                 scalar=models.ScalarQuantizationConfig(type=models.ScalarType.INT8, quantile=0.99, always_ram=True)),

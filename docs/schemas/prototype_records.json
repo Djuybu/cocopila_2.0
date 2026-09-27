@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Medical retrieval prototype records",
+  "description": "Prototype IDs are not official competition IDs. Runtime parent/uniqueness checks are in src/data/schema.py.",
+  "type": "object",
+  "required": ["documents", "chunks", "queries", "labels"],
+  "properties": {
+    "documents": {"type": "array", "items": {"$ref": "#/$defs/document"}},
+    "chunks": {"type": "array", "items": {"$ref": "#/$defs/chunk"}},
+    "queries": {"type": "array", "items": {"$ref": "#/$defs/query"}},
+    "labels": {"type": "array", "items": {"$ref": "#/$defs/label"}}
+  },
+  "$defs": {
+    "document": {
+      "type": "object", "required": ["doc_id"],
+      "properties": {"doc_id": {"type": "string", "minLength": 1}, "title": {"type": "string"}, "metadata": {"type": "object"}}
+    },
+    "chunk": {
+      "type": "object", "required": ["chunk_id", "doc_id", "text"],
+      "properties": {"chunk_id": {"type": "string", "minLength": 1}, "doc_id": {"type": "string", "minLength": 1}, "text": {"type": "string", "minLength": 1}, "title": {"type": "string"}, "metadata": {"type": "object"}}
+    },
+    "query": {
+      "type": "object", "required": ["id", "text"],
+      "properties": {"id": {"type": "string", "minLength": 1}, "query_id": {"type": "string"}, "text": {"type": "string", "minLength": 1}, "negative_chunk_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}}
+    },
+    "label": {
+      "type": "object", "required": ["id", "relevant_docs", "relevant_chunks"],
+      "properties": {"id": {"type": "string", "minLength": 1}, "relevant_docs": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}, "relevant_chunks": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}}
+    }
+  }
+}

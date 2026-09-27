@@ -1,0 +1,7 @@
+data:
+  documents_path: ../../data/processed/mmedc_p1_fourlang/documents.json
+  chunks_path: ../../data/processed/mmedc_p1_fourlang/chunk_corpus.jsonl
+  queries_path: ../../data/processed/mmedc_p1_fourlang/splits/val/queries.json
+  mappings_dir: ../../data/mappings/mmedc_p1_fourlang
+  manifest_path: ../../data/processed/mmedc_p1_fourlang/dataset_manifest.json
+  split: val

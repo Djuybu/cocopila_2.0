@@ -1,0 +1,9 @@
+download:
+  repo: Henrychur/MMedC
+  revision: 6629f0a54ae73b6f32d42476b2b9e90ff96035fd
+  languages: [chinese, english, japanese, french]
+  output_dir: ../../data/raw/mmedc
+  workers: 4
+  range_workers: 8
+  range_bytes: 67108864
+  attempts: 10

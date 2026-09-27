@@ -16,16 +16,15 @@ class CandidateGenerator:
 
     def generate(self, query, top_k):
         queries = list(dict.fromkeys([query] + (list(self.query_expander(query)) if self.query_expander else [])))
-        rankings = []
+        rankings = {}
         for source, (retriever, limit) in self.retrievers.items():
             variants = [normalize_candidates(retriever.retrieve(q, limit), source, limit) for q in queries]
             rows = variants[0] if len(variants) == 1 else reciprocal_rank_fusion(variants, self.rrf_k, limit)
-            rankings.append(rows)
+            rankings[source] = rows
         if self.method == "rrf":
             return reciprocal_rank_fusion(rankings, self.rrf_k, top_k)
         if self.method == "cc":
             if set(self.retrievers) != {"dense", "bm25"}:
                 raise ValueError("CC requires exactly dense and bm25 retrievers")
-            by_source = dict(zip(self.retrievers, rankings))
-            return HybridFusion(self.alpha).fuse(by_source["dense"], by_source["bm25"], top_k)
+            return HybridFusion(self.alpha).fuse(rankings["dense"], rankings["bm25"], top_k)
         return normalize_candidates(union_candidates(rankings), "union", top_k)

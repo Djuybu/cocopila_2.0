@@ -25,6 +25,12 @@ def load_records(path):
 
 def prepare_data(config):
     cfg = config.get("data", config)
+    if cfg.get("format") == "triplets":
+        from src.data.prototype import prepare_triplets
+        return prepare_triplets(config)
+    if cfg.get("format") == "mmedc":
+        from src.data.mmedc import prepare_mmedc
+        return prepare_mmedc(config)
     fields = cfg.get("fields", {})
     records = {
         kind: adapt_rows(load_records(cfg[f"{kind}_path"]), fields.get(kind, {}))

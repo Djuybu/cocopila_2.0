@@ -1,0 +1,21 @@
+data:
+  format: mmedc
+  repo: Henrychur/MMedC
+  revision: 6629f0a54ae73b6f32d42476b2b9e90ff96035fd
+  languages: [chinese, english, japanese, french]
+  raw_dir: ../../data/raw
+  archives_dir: ../../data/raw/mmedc
+  # Bounded ZIP range reads allow preparation while full downloads finish.
+  allow_remote_sampling: true
+  weak_labels_approved: true
+  output_dir: ../../data/processed/mmedc_p1_fourlang
+  mappings_dir: ../../data/mappings/mmedc_p1_fourlang
+  seed: 42
+  # Chosen only for validation language coverage, never for retrieval scores.
+  split_seed: 1
+  split_ratios: {train: 0.8, val: 0.1, test: 0.1}
+  max_documents_per_language: 16
+  max_chars_per_document: 8000
+  query_chars: 180
+  chunk_chars: 600
+  overlap_chars: 100

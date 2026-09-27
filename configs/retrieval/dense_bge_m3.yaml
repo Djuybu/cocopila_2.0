@@ -10,6 +10,9 @@ retrieval:
     max_seq_length: 8192
     batch_size: 32
     text_key: text
-    # Explicit legacy planned instruction, configurable per experiment.
+    # Preserve the legacy baseline; P1 configs explicitly use no BGE-M3 prefix.
     query_prefix: "Represent this sentence for searching relevant passages: "
+    document_prefix: ""
+    distance: cosine
+    normalize_embeddings: true
     top_k: 100

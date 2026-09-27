@@ -1,20 +1,33 @@
 """BM25Okapi baseline with explicit tokenization and JSON index snapshots."""
 from src.retrieval.base import BaseRetriever, normalize_candidates
 from src.utils.io import read_json, write_json
+import re
 
 
 class BM25Retriever(BaseRetriever):
     def __init__(self, index_path=None, *, k1=1.5, b=0.75, epsilon=0.25,
-                 lowercase=False, text_key="segmented_text"):
+                 lowercase=False, text_key="segmented_text", tokenizer="whitespace"):
         self.k1, self.b, self.epsilon = k1, b, epsilon
         self.lowercase, self.text_key = lowercase, text_key
+        if tokenizer not in {"whitespace", "unicode_cjk"}:
+            raise ValueError("Unknown BM25 tokenizer")
+        self.tokenizer = tokenizer
         self.corpus, self.model = [], None
         if index_path is not None:
             self.load_index(index_path)
 
     def tokenize_for_bm25(self, text):
         # Word-segmented input is supported; no implicit medical normalization.
-        return (text.lower() if self.lowercase else text).split()
+        text = text.lower() if self.lowercase else text
+        if self.tokenizer == "whitespace":
+            return text.split()
+        cjk = r"[\u3400-\u9fff\u3040-\u30ff]+"
+        tokens = []
+        for match in re.finditer(cjk, text):
+            run = match.group()
+            tokens.extend([run] if len(run) < 2 else [run[i:i + 2] for i in range(len(run) - 1)])
+        remaining = re.sub(cjk, " ", text)
+        return tokens + re.findall(r"[^\W_]+", remaining)
 
     def build_index(self, corpus, text_key=None):
         from rank_bm25 import BM25Okapi
@@ -43,7 +56,7 @@ class BM25Retriever(BaseRetriever):
         write_json(path, {
             "format": "medical-bm25-v1", "corpus": self.corpus,
             "parameters": {"k1": self.k1, "b": self.b, "epsilon": self.epsilon,
-                           "lowercase": self.lowercase, "text_key": self.text_key},
+                           "lowercase": self.lowercase, "text_key": self.text_key, "tokenizer": self.tokenizer},
         })
 
     def load_index(self, path):
@@ -53,6 +66,7 @@ class BM25Retriever(BaseRetriever):
         params = data["parameters"]
         self.k1, self.b, self.epsilon = params["k1"], params["b"], params["epsilon"]
         self.lowercase, self.text_key = params["lowercase"], params["text_key"]
+        self.tokenizer = params.get("tokenizer", "whitespace")
         self.build_index(data["corpus"])
 
 

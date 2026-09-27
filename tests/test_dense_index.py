@@ -42,7 +42,7 @@ def test_dense_pipeline_with_real_index(experiment, tmp_path, monkeypatch):
     }
     vectors = {"aspirin treatment": [1., 0.], "insulin diabetes": [0., 1.], "cardiac pressure": [-1., 0.]}
     monkeypatch.setattr(DenseRetriever, "encode_documents",
-                        lambda self, docs, batch_size: [vectors[doc] for doc in docs])
+                        lambda self, docs, batch_size, show_progress=False: [vectors[doc] for doc in docs])
     monkeypatch.setattr(DenseRetriever, "encode_query",
                         lambda self, query: [1., 0.] if query == "aspirin" else [0., 1.])
     build_dense_index(experiment)

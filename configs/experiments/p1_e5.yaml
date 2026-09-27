@@ -1,0 +1,7 @@
+extends:
+  - p1_benchmark_base.yaml
+  - ../retrieval/dense_e5.yaml
+run_name: p1_e5_fourlang
+retrieval:
+  dense:
+    index_dir: ../../artifacts/indexes/dense/mmedc_fourlang_e5_cosine
