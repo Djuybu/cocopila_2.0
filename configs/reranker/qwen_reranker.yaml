@@ -3,5 +3,7 @@ reranker:
   type: qwen
   model: Qwen/Qwen3-Reranker-0.6B
   device: cuda
-  batch_size: 16
+  batch_size: 1
+  max_length: 512
+  dtype: float16
   instruction: "Given a medical query and a medical document passage, determine if the document is relevant to the query."

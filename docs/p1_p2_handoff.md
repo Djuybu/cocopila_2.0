@@ -12,7 +12,7 @@ liệu processed/mappings tương ứng còn nguyên để đối chiếu finger
 ```bash
 python -m pip install -e ".[test]"
 python scripts/export_reranking_input.py --config configs/handoff/p1_to_p2.yaml
-python scripts/validate_reranking_input.py --run-dir outputs/p1_p2_handoff
+python scripts/validate_reranking_input.py --run-dir outputs/p1_p2_handoff_qwen3
 ```
 
 Config chọn `outputs/p1_bge_m3_fourlang/rrf_k60`: BM25 unicode_cjk + BGE-M3
@@ -21,14 +21,14 @@ Không retrieval lại, không thay ranking/score. Những lần xuất tiếp t
 `output_dir` và `archive_path` mới; thư mục/ZIP cũ không bị ghi đè.
 
 ```text
-outputs/p1_p2_handoff/
+outputs/p1_p2_handoff_qwen3/
 ├── candidates.jsonl   # Một record/query, mỗi candidate chứa đủ text và ID
 ├── queries.json       # Query text: [{"id": "...", "text": "...", ...}]
 ├── labels.json        # Weak labels cho đúng split này
 ├── registry.json      # Query coverage + chunk/document và internal/official mappings
 ├── config.yaml        # Reranker config, không phụ thuộc đường dẫn corpus/index máy gửi
 └── manifest.json      # Schema version, provenance, counts, SHA256 và giới hạn
-outputs/p1_p2_handoff.zip
+outputs/p1_p2_handoff_qwen3.zip
 ```
 
 ZIP chứa đúng sáu file trên ở root, không có folder con. Đây là **gói input
@@ -71,33 +71,66 @@ bắt buộc, rank/score hợp lệ, source provenance và SHA256. Khi có manif
 ## Người 2 chạy P2-01
 
 Sau khi nhận code và ZIP, giải nén vào thư mục run mới; có thể đổi vị trí/thư mục.
-Cài môi trường phù hợp rồi chạy (ví dụ giải nén vào `outputs/p1_p2_handoff`):
+Cài môi trường phù hợp rồi chạy (ví dụ giải nén gói mới vào `outputs/p1_p2_handoff_qwen3`):
 
 ```bash
-python -m pip install -e ".[dense,test]"
-python scripts/validate_reranking_input.py --run-dir outputs/p1_p2_handoff
-python scripts/run_reranking.py --run-dir outputs/p1_p2_handoff
+python -m pip install -e ".[qwen,test]"
+python scripts/validate_reranking_input.py --run-dir outputs/p1_p2_handoff_qwen3
+python scripts/run_reranking.py --run-dir outputs/p1_p2_handoff_qwen3 \
+  --output-dir outputs/p2_qwen3_001
 ```
 
-Output: `reranked.jsonl`, giữ query/chunk/doc IDs, text và retrieval evidence,
+Output trong run mới: `reranked.jsonl`, giữ query/chunk/doc IDs, text và retrieval evidence,
 thêm `rerank_score` cho mọi candidate. Query/candidate sidecars không bị ghi lại.
 Có thể đánh giá candidate recall hiện tại, **không phải reranker F2**, bằng:
 
 ```bash
 python scripts/run_evaluation.py \
-  --run-dir outputs/p1_p2_handoff --stage candidates --k 200
+  --run-dir outputs/p1_p2_handoff_qwen3 --stage candidates --k 200
 ```
 
 Labels path được resolve tương đối với config trong gói nên không phụ thuộc máy
 gửi. Không dùng `run_prediction`/`make_submission` ngay trên gói này: chưa có
 selector/submission config và chưa calibrate threshold (các việc P2 tiếp theo).
 
-Reranker mặc định `BAAI/bge-reranker-v2-m3`, CUDA, batch size 1. Đây là config
-khởi đầu, **không phải cam kết vừa mọi GPU**; cần tải model và môi trường PyTorch
-phù hợp. P2-01 chịu trách nhiệm đo inference thực và cấu hình dtype/token limit
-nếu cần. Không sửa file input đã có checksum; muốn config khác, xuất gói mới từ
-YAML handoff khác (hoặc copy config và dùng API `run_reranking(..., reranker=...)`
-để tiêm backend, ghi rõ thay đổi trong báo cáo thí nghiệm).
+Gói mới mặc định `Qwen/Qwen3-Reranker-0.6B`, CUDA, FP16, batch size 1,
+max_length=512. Đây là config khởi đầu, **không phải cam kết vừa mọi GPU**;
+cần tải model và môi trường PyTorch phù hợp. Để chạy CPU, dùng YAML override
+với `device: cpu`, `dtype: float32`. BGE config cũ vẫn được giữ riêng.
+
+### Dùng gói BGE đã nhận để chạy Qwen3, không cần xuất lại
+
+Không sửa config hay checksum của gói cũ. Chọn model qua config override và bắt
+buộc ghi sang run mới:
+
+```bash
+python scripts/run_reranking.py --run-dir outputs/p1_p2_handoff \
+  --config configs/reranker/qwen_reranker.yaml --output-dir outputs/p2_qwen3_001
+```
+
+Hoặc rerank + benchmark một lượt, dùng output directory mới:
+
+```bash
+python scripts/benchmark_reranking.py --run-dir outputs/p1_p2_handoff \
+  --config configs/reranker/qwen_reranker.yaml --output-dir outputs/p2_qwen3_benchmark001
+```
+
+`config.yaml` trong output là cấu hình thực đã chạy; queries/candidates/labels/
+registry được copy nguyên byte, `input_manifest.json` giữ provenance gói gốc.
+Manifest gốc không được giả làm checksum cho config đã override. Model, batch,
+token limit, dtype và instruction đều do factory lấy từ YAML. Medical instruction
+Qwen đi vào native chat template qua `prompts`, không ghép vào query text;
+theo [model card Qwen](https://huggingface.co/Qwen/Qwen3-Reranker-0.6B).
+
+`reranking_benchmark.json` báo binary chunk NDCG/MRR/Precision/Recall trước/sau,
+macro và từng query; document Recall@K cùng ngân sách K chunks như P1. Model-load
+time tách khỏi latency từng query; CUDA được synchronize khi đo, peak VRAM là
+torch allocated memory. Không warmup mặc định nên query đầu gồm chi phí khởi
+tạo inference kernel; không diễn giải thành latency steady-state. Không sinh
+qrels mới, không báo clinical safety/calibration hay F2 khi chưa có selector.
+
+Notebook chính và bản `.py` gọi cùng pipeline trên. Notebook benchmark heuristic
+cũ được giữ nguyên logic ở `notebooks/legacy/P2_01_controlled_evaluation.*`.
 
 ## Giới hạn và kiểm thử
 

@@ -1,2 +1,4 @@
-extends: base.yaml
+extends:
+  - base.yaml
+  - ../reranker/qwen_reranker.yaml
 run_name: exp003

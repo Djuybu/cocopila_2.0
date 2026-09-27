@@ -23,6 +23,11 @@ def main(command):
         parser.add_argument("--registry", required=True, type=Path)
     else:
         parser.add_argument("--run-dir", type=Path)
+        if command in {"run_reranking", "benchmark_reranking"}:
+            parser.add_argument("--config", type=Path, help="Reranker override; requires a separate output directory")
+            parser.add_argument("--output-dir", type=Path, required=command == "benchmark_reranking")
+            if command == "benchmark_reranking":
+                parser.add_argument("--ks", nargs="+", type=int, default=[1, 3, 5, 10, 20, 50, 100, 200])
         if command == "make_submission":
             parser.add_argument("--run")
             parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
@@ -33,7 +38,7 @@ def main(command):
             parser.add_argument("--k", type=int)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    if hasattr(args, "config"):
+    if command not in {"run_reranking", "benchmark_reranking"} and hasattr(args, "config"):
         config = load_config(args.config)
         if getattr(args, "run_name", None):
             config["run_name"] = args.run_name
@@ -85,7 +90,17 @@ def main(command):
             result = {key: manifest[key] for key in ("schema_version", "query_count", "candidate_count", "label_quality")}
         elif command == "run_reranking":
             from src.pipeline.rerank import run_reranking
-            result = run_reranking(run_dir)
+            if args.config and not args.output_dir:
+                parser.error("--config requires --output-dir to preserve input config/checksums")
+            result = run_reranking(run_dir, reranker_config=load_config(args.config) if args.config else None,
+                                   output_dir=args.output_dir)
+        elif command == "benchmark_reranking":
+            from src.pipeline.reranker_benchmark import benchmark_reranking
+            report = benchmark_reranking(run_dir, args.output_dir,
+                                         reranker_config=load_config(args.config) if args.config else None, ks=args.ks)
+            result = {"run_id": report["run_id"], "query_count": report["query_count"],
+                      "candidate_count": report["candidate_count"], "label_quality": report["label_quality"],
+                      "metrics": report["after"]["macro"], "output_path": str(args.output_dir / "reranking_benchmark.json")}
         elif command == "run_prediction":
             from src.pipeline.predict import run_prediction
             run_prediction(run_dir)

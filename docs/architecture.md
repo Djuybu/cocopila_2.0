@@ -97,6 +97,21 @@ remains available for old API callers, while the canonical default returns all.
 Scores are the cross-encoder backend's output, not guaranteed calibrated
 probabilities. Thresholds are null in baseline configs until calibrated on val.
 
+The pipeline instantiates adapters through `create_reranker`; Qwen3 is selected
+in exp003 and new P1 handoffs, while old configs without a type still select BGE.
+Qwen uses Sentence Transformers >=6.1's native prompt/chat template and accepts
+max_length, dtype and revision from YAML. Original query text is not prefixed
+with the instruction. Reranked candidate coverage, IDs/text/evidence and finite
+descending scores are checked before writing each query record.
+
+Received handoffs can use a reranker YAML override only with a separate output
+run. Input sidecars remain untouched, effective config is snapshotted and the
+original manifest is saved as input_manifest.json, not re-used as checksums for
+the new config. `benchmark_reranking` evaluates the same candidate pool and labels
+before/after, with binary chunk ranking metrics and shared-K chunk/doc recall.
+It does not regenerate a corpus, queries or qrels. P2's earlier controlled
+heuristic benchmark is retained under notebooks/legacy rather than removed.
+
 Before selection, internal rechunks collapse to official chunks using their
 highest score. This prevents duplicate mappings from consuming the output limit
 or reducing fallback coverage.

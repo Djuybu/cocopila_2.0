@@ -4,8 +4,9 @@ Python pipeline cho truy xuất tài liệu y khoa:
 
 **data → retrieval → reranking → scoring → evaluation → submission**
 
-Baseline BM25 chạy trên CPU. Dense dùng BGE-M3 + Qdrant; reranking dùng
-bge-reranker-v2-m3. Model được nạp khi cần. Generation bằng Qwen, multilingual và
+Baseline BM25 chạy trên CPU. Dense dùng BGE-M3 + Qdrant; exp003 và gói bàn giao
+mới dùng Qwen3-Reranker-0.6B. BGE reranker vẫn có config riêng để so sánh.
+Model được nạp khi cần. Generation bằng Qwen, multilingual và
 các interface preprocessing cũ được giữ lại nhưng chưa triển khai.
 
 Dataset và model weights không được đưa vào Git. Các lệnh dưới đây cần dữ liệu đầu vào
@@ -17,7 +18,7 @@ theo schema mô tả; tests có corpus nhỏ riêng để kiểm tra pipeline.
 configs/
   data/                  # Raw preparation + prepared dataset paths
   retrieval/             # BM25, BGE-M3, fusion
-  reranker/              # BGE cross-encoder
+  reranker/              # Qwen3 + preserved BGE cross-encoder
   handoff/               # Portable P1 → P2 candidate export
   experiments/           # exp000 BM25, exp001 dense, exp002 hybrid, exp003 full
 data/
@@ -68,6 +69,10 @@ Cho dense retrieval và reranking:
 ```bash
 python -m pip install -e ".[dense]"
 ```
+
+Qwen3 reranking cần Sentence Transformers >= 6.1 với native chat-template support:
+`python -m pip install -e ".[qwen,test]"`. Full pipeline với dense + Qwen:
+`python -m pip install -e ".[dense,qwen,test]"`.
 
 Đọc Parquet: `python -m pip install -e ".[parquet]"`.
 requirements.txt giữ các dependencies đầy đủ của thiết kế RAG cũ, gồm generation;
@@ -185,18 +190,37 @@ Xuất từ benchmark đã có, không chạy lại retrieval:
 
 ```bash
 python scripts/export_reranking_input.py --config configs/handoff/p1_to_p2.yaml
-python scripts/validate_reranking_input.py --run-dir outputs/p1_p2_handoff
+python scripts/validate_reranking_input.py --run-dir outputs/p1_p2_handoff_qwen3
 ```
 
-Tạo `outputs/p1_p2_handoff.zip` với candidate schema cố định, query text, weak
+Tạo `outputs/p1_p2_handoff_qwen3.zip` với candidate schema cố định, query text, weak
 labels, registry, portable reranker config và manifest SHA256. Gói hiện tại có
 7 queries/1.400 RRF candidates; giữ nguyên ID/text/rank/score nguồn. ZIP bị Git
 ignore, cần chuyển riêng cho Người 2. Sau khi giải nén, Người 2 chạy:
 
 ```bash
-python -m pip install -e ".[dense,test]"
-python scripts/run_reranking.py --run-dir outputs/p1_p2_handoff
+python -m pip install -e ".[qwen,test]"
+python scripts/run_reranking.py --run-dir outputs/p1_p2_handoff_qwen3 \
+  --output-dir outputs/p2_qwen3_001
 ```
+
+Nếu đã nhận gói **cũ** `outputs/p1_p2_handoff` có config BGE, không cần xuất lại:
+
+```bash
+python scripts/run_reranking.py --run-dir outputs/p1_p2_handoff \
+  --config configs/reranker/qwen_reranker.yaml --output-dir outputs/p2_qwen3_001
+```
+
+Benchmark ranking trước/sau trên đúng candidates/labels của gói cũ (lựa chọn
+thay thế lệnh reranking ở trên; dùng output_dir mới):
+
+```bash
+python scripts/benchmark_reranking.py --run-dir outputs/p1_p2_handoff \
+  --config configs/reranker/qwen_reranker.yaml --output-dir outputs/p2_qwen3_benchmark001
+```
+
+Notebook chính `notebooks/P2_01_reranker_evaluation.ipynb` gọi cùng pipeline;
+benchmark controlled/heuristic cũ giữ ở `notebooks/legacy/`.
 
 Không cần corpus/index trên máy gửi. Đây là input cho P2-01, **không phải nhãn
 hay ID chính thức của cuộc thi**, và model reranker thật chưa được benchmark
@@ -242,6 +266,9 @@ với đúng hai nguồn bm25 và dense. CandidateGenerator chỉ retrieval/fusi
 không chứa reranker.
 
 ## Run reranking
+
+`exp003_full.yaml` chọn Qwen3 qua reranker factory, FP16/batch=1/max_length=512
+từ YAML. Các configs/reranker/bge_reranker.yaml và benchmark BGE cũ được giữ nguyên.
 
 Chạy từng stage của exp003 (chưa chạy full exp003 trước đó):
 

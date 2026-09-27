@@ -20,6 +20,9 @@ class QwenReranker(BaseReranker):
         model: Any = None,
         batch_size: int = 16,
         instruction: Optional[str] = DEFAULT_MEDICAL_INSTRUCTION,
+        max_length: Optional[int] = None,
+        dtype: Optional[str] = None,
+        revision: Optional[str] = None,
     ):
         legacy = Settings()
         self.model_name = model_name or "Qwen/Qwen3-Reranker-0.6B"
@@ -27,13 +30,32 @@ class QwenReranker(BaseReranker):
         self.model = model
         self.batch_size = batch_size
         self.instruction = instruction
+        if type(batch_size) is not int or batch_size < 1:
+            raise ValueError("batch_size must be a positive integer")
+        if max_length is not None and (type(max_length) is not int or max_length < 1):
+            raise ValueError("max_length must be a positive integer")
+        if dtype not in (None, "float16", "bfloat16", "float32"):
+            raise ValueError("Unsupported Qwen dtype")
+        self.max_length, self.dtype, self.revision = max_length, dtype, revision
 
     def load_model(self) -> None:
         """Lazily load sentence_transformers CrossEncoder for Qwen3 reranker."""
         if self.model is None:
+            from importlib.metadata import version
+            if tuple(int(part) for part in version("sentence-transformers").split(".")[:2]) < (6, 1):
+                raise RuntimeError('Qwen reranking requires sentence-transformers>=6.1; install ".[qwen]"')
             from sentence_transformers import CrossEncoder
-
-            self.model = CrossEncoder(self.model_name, device=self.device)
+            kwargs = {"device": self.device}
+            if self.instruction is not None:
+                kwargs.update(prompts={"medical": self.instruction}, default_prompt_name="medical")
+            if self.max_length is not None:
+                kwargs["max_length"] = self.max_length
+            if self.revision is not None:
+                kwargs["revision"] = self.revision
+            if self.dtype is not None:
+                import torch
+                kwargs["model_kwargs"] = {"dtype": getattr(torch, self.dtype)}
+            self.model = CrossEncoder(self.model_name, **kwargs)
 
     def rerank(
         self,
@@ -48,8 +70,8 @@ class QwenReranker(BaseReranker):
             return []
 
         self.load_model()
-        formatted_query = f"{self.instruction} {query}" if self.instruction else query
-        pairs = [(formatted_query, row["text"]) for row in candidates]
+        # CrossEncoder puts instruction in the chat template, not query text.
+        pairs = [(query, row["text"]) for row in candidates]
         scores = self.model.predict(pairs, batch_size=self.batch_size)
 
         if len(scores) != len(candidates):

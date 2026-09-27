@@ -1,9 +1,9 @@
-extends: ../reranker/bge_reranker.yaml
+extends: ../reranker/qwen_reranker.yaml
 handoff:
   source_run_dir: ../../outputs/p1_bge_m3_fourlang
   method: rrf_k60
-  output_dir: ../../outputs/p1_p2_handoff
-  archive_path: ../../outputs/p1_p2_handoff.zip
+  output_dir: ../../outputs/p1_p2_handoff_qwen3
+  archive_path: ../../outputs/p1_p2_handoff_qwen3.zip
 reranker:
   # Conservative starting batch; P2 owns real-model/VRAM validation.
   batch_size: 1

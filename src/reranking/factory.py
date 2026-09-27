@@ -40,13 +40,18 @@ def create_reranker(config: Dict[str, Any]) -> BaseReranker:
     if device is not None:
         kwargs["device"] = device
     if batch_size is not None:
-        kwargs["batch_size"] = int(batch_size)
+        if type(batch_size) is not int or batch_size < 1:
+            raise ValueError("batch_size must be a positive integer")
+        kwargs["batch_size"] = batch_size
     if instruction is not None:
         kwargs["instruction"] = instruction
 
     if reranker_type in ("bge", "cross_encoder"):
         return CrossEncoderReranker(**kwargs)
     elif reranker_type == "qwen":
+        for key in ("max_length", "dtype", "revision"):
+            if cfg.get(key) is not None:
+                kwargs[key] = cfg[key]
         return QwenReranker(**kwargs)
     else:
         raise ValueError(

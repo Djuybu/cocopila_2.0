@@ -55,7 +55,8 @@ def test_qwen_reranker_basic_and_instruction():
 
     assert len(results) == 1
     assert results[0]["chunk_id"] == "c2"
-    assert mock_model.last_pairs[0][0] == "Evaluate medical relevance: query text"
+    assert mock_model.last_pairs[0][0] == "query text"
+    assert reranker.instruction == custom_instruction
 
 
 def test_qwen_reranker_empty_and_validation():
