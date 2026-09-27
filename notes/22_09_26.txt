@@ -1,6 +1,19 @@
 Chia việc:
 - Làm data(convert chunk -> graph DB): Quế
-- Làm RAG pipeline
+- Làm RAG pipeline: MMD
 - DevOps: Mzuy
 
 Tìm hiểu: Neo4J
+1. Data
+- Sử dụng 2 database: một vector DB và một graph DB. Vector chứa embed, graph chứa vị trí và metadata.
+- Embedder sẽ embed dữ liệu vào Vector DB -> mô hình tạo node trong graph.
+- Nhiệm vụ: Tìm hiểu xây dựng một schema cho các chunk tài liệu
+ + Các thuộc tính cần đưa vào node
+ + Các mối quan hệ giữa tài liệu
+ + Nếu mô hình truy vấn thì sử dụng graph này ntn?
+
+2. Pipeline
+Mai Ngọc Duy đọc kế hoạch r duyệt
+Please ToT
+
+
