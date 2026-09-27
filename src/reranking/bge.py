@@ -5,10 +5,11 @@ from src.reranking.base import BaseReranker
 
 
 class CrossEncoderReranker(BaseReranker):
-    def __init__(self, model_name=None, device=None, *, model=None, batch_size=32):
+    def __init__(self, model_name=None, device=None, *, model=None, batch_size=32, instruction=None):
         legacy = Settings()
         self.model_name, self.device = model_name or legacy.RERANKER_MODEL, device or legacy.DEVICE
         self.model, self.batch_size = model, batch_size
+        self.instruction = instruction
 
     def load_model(self):
         if self.model is None:
@@ -21,7 +22,8 @@ class CrossEncoderReranker(BaseReranker):
         if not candidates or top_k == 0:
             return []
         self.load_model()
-        scores = self.model.predict([(query, row["text"]) for row in candidates], batch_size=self.batch_size)
+        formatted_query = f"{self.instruction} {query}" if self.instruction else query
+        scores = self.model.predict([(formatted_query, row["text"]) for row in candidates], batch_size=self.batch_size)
         if len(scores) != len(candidates):
             raise ValueError("Reranker returned the wrong number of scores")
         rows = [{**row, "rerank_score": float(score)} for row, score in zip(candidates, scores)]
