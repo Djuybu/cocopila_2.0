@@ -1,23 +1,76 @@
 # %% [markdown]
 # # P2-01: Medical Reranker Comprehensive Evaluation & Benchmarking
 # ### BAAI/bge-reranker-v2-m3 vs Qwen/Qwen3-Reranker-0.6B on Kaggle 2×T4 GPUs
-# 
+#
 # This notebook evaluates and compares two premier medical rerankers across 5 evaluation pillars (4 clinical evaluation pillars + resource efficiency):
 # 1. **Quantitative IR Performance**: Graded NDCG@3/5/10, MRR@5/10, Recall@10
 # 2. **Clinical Safety**: Negation / Contraindication Sensitivity Rate & PICO Population Alignment Rate
 # 3. **Score Calibration**: Expected Calibration Error (ECE 10 bins) & Score Separability
 # 4. **Cross-lingual Parity**: ΔNDCG@10 and ΔMRR on parallel English/Chinese clinical concepts
 # 5. **Resource Efficiency**: Peak VRAM (GB) on Tesla T4, Latency (ms/query), and Throughput (qps)
-# 
+#
 # Hardware target: Kaggle 2×Tesla T4 (16GB GDDR6 each = 32GB total VRAM).
 
-# %% Cell 1: Environment Setup & Dual-T4 GPU Detection
+# %% Cell 1: Clone Repository from GitHub
+# In Kaggle notebook, runs: !git clone https://github.com/Djuybu/cocopila_2.0.git /kaggle/working/cocopila_2.0
+import os
+from pathlib import Path
+import subprocess
+
+REPO_URL = "https://github.com/Djuybu/cocopila_2.0.git"
+REPO_DIR = "/kaggle/working/cocopila_2.0"
+
+if Path("/kaggle").exists():
+    if not os.path.exists(REPO_DIR):
+        subprocess.run(["git", "clone", REPO_URL, REPO_DIR], check=True)
+    else:
+        print(f"Repository already exists at {REPO_DIR}. Pulling latest code...")
+        subprocess.run(["git", "-C", REPO_DIR, "pull"], check=False)
+else:
+    print("Local environment detected; repository clone skipped.")
+
+# %% Cell 2: Setup Kaggle Working Directory & Python Path
+# In Kaggle notebook, runs: %cd /kaggle/working/cocopila_2.0
+import os
+import sys
+from pathlib import Path
+import subprocess
+
+REPO_DIR = "/kaggle/working/cocopila_2.0"
+
+if Path("/kaggle").exists():
+    os.chdir(REPO_DIR)
+    if REPO_DIR not in sys.path:
+        sys.path.insert(0, REPO_DIR)
+    if os.path.exists(f"{REPO_DIR}/src") and not os.path.exists("/kaggle/working/src"):
+        subprocess.run(["cp", "-r", f"{REPO_DIR}/src", "/kaggle/working/"])
+    if os.path.exists(f"{REPO_DIR}/configs") and not os.path.exists("/kaggle/working/configs"):
+        subprocess.run(["cp", "-r", f"{REPO_DIR}/configs", "/kaggle/working/"])
+else:
+    if str(Path.cwd()) not in sys.path:
+        sys.path.insert(0, str(Path.cwd()))
+
+print(f"Current working directory: {os.getcwd()}")
+
+# %% Cell 3: Install Dependencies on Kaggle
+# In Kaggle notebook, runs: !pip install -q qdrant-client sentence-transformers accelerate
+import subprocess
+import sys
+
+for pkg in ["qdrant-client", "sentence-transformers", "accelerate"]:
+    try:
+        __import__(pkg.replace("-", "_"))
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", pkg])
+
+# %% Cell 4: Import Necessary Libraries
 import gc
 import json
 import logging
 import math
 import os
 from pathlib import Path
+import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -29,6 +82,21 @@ import numpy as np
 import pandas as pd
 import torch
 
+# Vector DB & Embeddings
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, PointStruct, VectorParams
+from sentence_transformers import SentenceTransformer
+
+# Ensure project root is in sys.path when running on Kaggle or other environments
+for p in [Path.cwd(), Path.cwd().parent, Path("/kaggle/working")]:
+    if (p / "src").exists() and str(p) not in sys.path:
+        sys.path.insert(0, str(p))
+
+# Medical Reranker Modules
+from src.reranking.bge import CrossEncoderReranker
+from src.reranking.qwen_reranker import QwenReranker
+
+# %% Cell 5: Environment Setup & Dual-T4 GPU Detection
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("reranker_eval")
 
@@ -68,16 +136,16 @@ def reset_cuda(device: str) -> None:
 
 
 # Configuration
-DATA_DIR = Path("./data/test/reranker_eval")
+DATA_DIR = Path("/kaggle/input/datasets/duymcminh/r2ai-phase3-reranker-model-test-dataset")
 if not DATA_DIR.exists():
-    # Kaggle dataset path fallback
-    DATA_DIR = Path("/kaggle/input/reranker-eval-data")
+    # Local fallback for development / testing
+    DATA_DIR = Path("./data/test/reranker_eval")
     if not DATA_DIR.exists():
         DATA_DIR = Path("../data/test/reranker_eval")
 
 logger.info(f"Using evaluation data directory: {DATA_DIR.resolve()}")
 
-# %% Cell 2: Load Test Data & Init Dual Qdrant Collections
+# %% Cell 6: Load Test Data & Init Dual Qdrant Collections
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
@@ -156,7 +224,7 @@ logger.info(f"Indexed {len(points_bgem3)} vectors in collection '{COLLECTION_BGE
 
 chunk_by_id = {c["chunk_id"]: c for c in chunks}
 
-# %% Cell 3: Load Test Cases & Sanity Checks
+# %% Cell 7: Load Test Cases & Sanity Checks
 test_cases_path = DATA_DIR / "test_cases.json"
 with open(test_cases_path, "r", encoding="utf-8") as f:
     test_cases_data = json.load(f)
@@ -174,7 +242,7 @@ logger.info(f"Adversarial PICO Cases: {len(adv_pico_cases)}")
 logger.info(f"Cross-lingual Concept Pairs: {len(cross_lingual_cases)}")
 logger.info(f"Total Test Cases: {test_cases_data.get('total_cases', len(ir_cases)+len(adv_neg_cases)+len(adv_pico_cases)+len(cross_lingual_cases))}")
 
-# %% Cell 4: Evaluation Metrics Module
+# %% Cell 8: Evaluation Metrics Module
 def dcg_at_k(ranked_ids: List[str], graded_relevance: Dict[str, int], k: int) -> float:
     """Compute Discounted Cumulative Gain at K with graded relevance."""
     score = 0.0
@@ -239,7 +307,7 @@ def compute_ece(confidences: List[float], labels: List[int], n_bins: int = 10) -
 
     return float(ece)
 
-# %% Cell 5: Evaluation Runner Engine
+# %% Cell 9: Evaluation Runner Engine
 def run_evaluation_suite(
     reranker: Any,
     reranker_name: str,
@@ -372,7 +440,7 @@ def run_evaluation_suite(
     logger.info(f"Finished evaluation for {reranker_name}: NDCG@10={mean_ndcg10:.4f}, NegSens={neg_sensitivity_pct:.1f}%, PeakVRAM={peak_vram_gb:.2f}GB")
     return metrics
 
-# %% Cell 6: Run BAAI/bge-reranker-v2-m3
+# %% Cell 10: Run BAAI/bge-reranker-v2-m3
 from src.reranking.bge import CrossEncoderReranker
 
 bge_model_name = "BAAI/bge-reranker-v2-m3"
@@ -392,7 +460,7 @@ bge_results = run_evaluation_suite(bge_reranker, "bge-reranker-v2-m3", device_re
 del bge_reranker
 reset_cuda(device_reranker_1)
 
-# %% Cell 7: Run Qwen/Qwen3-Reranker-0.6B
+# %% Cell 11: Run Qwen/Qwen3-Reranker-0.6B
 from src.reranking.qwen_reranker import QwenReranker
 
 qwen_model_name = "Qwen/Qwen3-Reranker-0.6B"
@@ -412,7 +480,7 @@ qwen_results = run_evaluation_suite(qwen_reranker, "Qwen3-Reranker-0.6B", device
 del qwen_reranker
 reset_cuda(device_reranker_2)
 
-# %% Cell 8: Comparison Dashboard & Visualizations
+# %% Cell 12: Comparison Dashboard & Visualizations
 comparison_data = [
     {
         "Evaluation Pillar": "1. Quantitative IR",
@@ -564,3 +632,4 @@ if plt is not None:
 else:
     logger.info("matplotlib is not installed; skipping radar chart plot.")
     print(f"Evaluation finished successfully! Report: {report_path.name}")
+
