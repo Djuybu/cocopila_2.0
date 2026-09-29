@@ -23,7 +23,7 @@ qdrant-client>=1.9.0
 
 # --- Sparse / Lexical Search ---
 rank-bm25>=0.2.2
-fastbm25>=0.0.3
+fastbm25>=0.0.2
 
 # --- Vietnamese NLP ---
 pyvi>=0.1.1

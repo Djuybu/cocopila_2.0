@@ -41,11 +41,15 @@ class QwenReranker(BaseReranker):
     def load_model(self) -> None:
         """Lazily load sentence_transformers CrossEncoder for Qwen3 reranker."""
         if self.model is None:
+            import torch
             from importlib.metadata import version
             if tuple(int(part) for part in version("sentence-transformers").split(".")[:2]) < (6, 1):
                 raise RuntimeError('Qwen reranking requires sentence-transformers>=6.1; install ".[qwen]"')
             from sentence_transformers import CrossEncoder
-            kwargs = {"device": self.device}
+            device = self.device
+            if device and str(device).startswith("cuda") and not torch.cuda.is_available():
+                device = "cpu"
+            kwargs = {"device": device}
             if self.instruction is not None:
                 kwargs.update(prompts={"medical": self.instruction}, default_prompt_name="medical")
             if self.max_length is not None:

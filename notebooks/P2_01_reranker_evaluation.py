@@ -8,7 +8,42 @@
 # 3. **Thực thi Reranking Benchmark**: Chạy inference chấm điểm từng cặp `(query, chunk)` qua `benchmark_reranking`.
 # 4. **Phân tích Đa chiều**: So sánh macro metrics Before vs After (Recall@K, MRR@K, NDCG@K), phân tích độ trễ (latency mean, p50, p95), phân tích cải thiện theo từng query và trực quan hóa biểu đồ.
 
-# %% Cell 1: Environment Setup & GPU Verification
+# %% Cell 1: Clone Repository from GitHub into Working Directory
+import os
+import shutil
+import subprocess
+from pathlib import Path
+
+REPO_URL = "https://github.com/Djuybu/cocopila_2.0.git"
+WORKING_DIR = Path("/kaggle/working") if Path("/kaggle/working").exists() else Path.cwd()
+REPO_DIR = WORKING_DIR / "cocopila_2.0"
+
+# Clone or pull repository on Kaggle / working directory
+if Path("/kaggle").exists() or not (WORKING_DIR / "src").exists():
+    if not REPO_DIR.exists():
+        print(f"Cloning {REPO_URL} into {REPO_DIR}...")
+        subprocess.run(["git", "clone", REPO_URL, str(REPO_DIR)], check=True)
+    else:
+        print(f"Updating repository at {REPO_DIR}...")
+        subprocess.run(["git", "-C", str(REPO_DIR), "pull"], check=False)
+
+    # Copy src, config (Python package) and configs (YAMLs) into working directory
+    for item in ["src", "config", "configs"]:
+        src_path = REPO_DIR / item
+        dest_path = WORKING_DIR / item
+        if src_path.exists() and not dest_path.exists():
+            if src_path.is_dir():
+                shutil.copytree(src_path, dest_path)
+            else:
+                shutil.copy2(src_path, dest_path)
+
+    # Install editable package so both src and config modules are registered
+    subprocess.run(["pip", "install", "-q", "-e", str(REPO_DIR)], check=False)
+    os.chdir(WORKING_DIR)
+
+print(f"Working directory ready: {os.getcwd()}")
+
+# %% Cell 2: Environment Setup & GPU Verification
 import logging
 import os
 from pathlib import Path
@@ -26,7 +61,7 @@ for i in range(num_gpus):
     total_mem_gb = props.total_memory / (1024**3)
     logger.info(f"GPU {i}: {props.name} ({total_mem_gb:.2f} GB VRAM)")
 
-# %% Cell 2: Resolve Handoff Input Directory
+# %% Cell 3: Resolve Handoff Input Directory
 import zipfile
 
 possible_locations = [
@@ -39,27 +74,58 @@ possible_locations = [
 ]
 
 HANDOFF_DIR = None
+
+# 1. Check explicitly listed paths (including nested folders and zip archives)
 for loc in possible_locations:
     if loc and loc.exists():
         if loc.is_dir() and (loc / "manifest.json").exists():
             HANDOFF_DIR = loc
             break
+        if loc.is_dir():
+            sub_manifests = list(loc.rglob("manifest.json"))
+            if sub_manifests:
+                HANDOFF_DIR = sub_manifests[0].parent
+                break
         zips = list(loc.glob("*.zip")) if loc.is_dir() else ([loc] if loc.suffix == ".zip" else [])
         if zips:
             extract_target = Path("/kaggle/working/p1_p2_handoff") if Path("/kaggle/working").exists() else Path("outputs/p1_p2_handoff")
             extract_target.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(zips[0], "r") as zf:
                 zf.extractall(extract_target)
-            if (extract_target / "manifest.json").exists():
-                HANDOFF_DIR = extract_target
+            extracted_manifests = list(extract_target.rglob("manifest.json"))
+            if extracted_manifests:
+                HANDOFF_DIR = extracted_manifests[0].parent
                 break
+
+# 2. Dynamic discovery: search anywhere in /kaggle/input if not found yet
+if HANDOFF_DIR is None and Path("/kaggle/input").exists():
+    kaggle_manifests = list(Path("/kaggle/input").rglob("manifest.json"))
+    if kaggle_manifests:
+        HANDOFF_DIR = kaggle_manifests[0].parent
+    else:
+        kaggle_zips = list(Path("/kaggle/input").rglob("*.zip"))
+        if kaggle_zips:
+            extract_target = Path("/kaggle/working/p1_p2_handoff")
+            extract_target.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(kaggle_zips[0], "r") as zf:
+                zf.extractall(extract_target)
+            extracted = list(extract_target.rglob("manifest.json"))
+            if extracted:
+                HANDOFF_DIR = extracted[0].parent
 
 if HANDOFF_DIR is None:
     HANDOFF_DIR = Path("outputs/p1_p2_handoff_qwen3")
 
 logger.info(f"Using handoff input directory: {HANDOFF_DIR.resolve()}")
+if not HANDOFF_DIR.exists():
+    kaggle_inputs = [str(p) for p in Path("/kaggle/input").iterdir()] if Path("/kaggle/input").exists() else []
+    logger.warning(
+        f"Handoff bundle not found at {HANDOFF_DIR.resolve()}. "
+        f"Available items in /kaggle/input: {kaggle_inputs}. "
+        "Please attach your dataset in Kaggle via '+ Add Input'."
+    )
 
-# %% Cell 3: Validate Handoff Input Manifest
+# %% Cell 4: Validate Handoff Input Manifest
 from src.pipeline.handoff import validate_reranking_input
 from src.utils.io import read_json
 
@@ -78,7 +144,7 @@ else:
     manifest = None
     logger.warning(f"Handoff directory {HANDOFF_DIR} does not exist yet. Please provide handoff bundle.")
 
-# %% Cell 4: Inspect Queries & Candidate Pool Statistics
+# %% Cell 5: Inspect Queries & Candidate Pool Statistics
 import pandas as pd
 from src.data.loader import load_records
 
@@ -95,7 +161,7 @@ if HANDOFF_DIR.exists() and (HANDOFF_DIR / "candidates.jsonl").exists():
     logger.info(f"Candidate count stats: Min={min(cand_counts)}, Max={max(cand_counts)}, Mean={sum(cand_counts)/len(cand_counts):.1f}")
     print(df_inspect.head(10).to_string(index=False))
 
-# %% Cell 5: Load Reranker Configuration
+# %% Cell 6: Load Reranker Configuration
 from src.utils.config import load_config
 
 CONFIG_PATH = Path(os.environ.get("P2_RERANKER_CONFIG", "configs/reranker/qwen_reranker.yaml"))
@@ -112,7 +178,7 @@ logger.info(f"Reranker Type: {reranker_cfg.get('type')}, Model: {reranker_cfg.ge
 logger.info(f"Batch Size: {reranker_cfg.get('batch_size')}, Dtype: {reranker_cfg.get('dtype')}")
 logger.info(f"Output Directory: {OUTPUT_DIR.resolve()}")
 
-# %% Cell 6: Execute Reranking Benchmark Engine
+# %% Cell 7: Execute Reranking Benchmark Engine
 from src.pipeline.reranker_benchmark import benchmark_reranking
 
 if HANDOFF_DIR.exists():
@@ -131,7 +197,7 @@ else:
     report = None
     logger.warning(f"Cannot run benchmark because {HANDOFF_DIR} was not found.")
 
-# %% Cell 7: Macro Metrics Comparison (Before vs After Reranking)
+# %% Cell 8: Macro Metrics Comparison (Before vs After Reranking)
 if report is not None:
     ks = [1, 3, 5, 10, 20, 50, 100, 200]
     comparison_rows = []
@@ -158,7 +224,7 @@ if report is not None:
     print(df_metrics.to_string(index=False))
     print("=" * 70)
 
-# %% Cell 8: Latency, Throughput & Resource Profiling
+# %% Cell 9: Latency, Throughput & Resource Profiling
 if report is not None:
     perf = report["performance"]
     perf_rows = [
@@ -180,7 +246,7 @@ if report is not None:
     print(df_perf.to_string(index=False))
     print("-" * 60)
 
-# %% Cell 9: Per-Query Impact Analysis (Top Gains & Losses)
+# %% Cell 10: Per-Query Impact Analysis (Top Gains & Losses)
 if report is not None:
     scored_candidates = load_records(OUTPUT_DIR / "reranked.jsonl")
     labels = read_json(HANDOFF_DIR / "labels.json")
@@ -209,7 +275,7 @@ if report is not None:
     print("\nPer-Query Impact Summary:")
     print(df_queries.head(10).to_string(index=False))
 
-# %% Cell 10: Visualizations (Recall@K Curves)
+# %% Cell 11: Visualizations (Recall@K Curves)
 try:
     import matplotlib.pyplot as plt
 except ImportError:
@@ -236,7 +302,7 @@ if plt is not None and report is not None:
 else:
     logger.info("Matplotlib not available or report empty; skipping visualization.")
 
-# %% Cell 11: Export Summary Report CSV & Artifacts
+# %% Cell 12: Export Summary Report CSV & Artifacts
 if report is not None:
     summary_path = OUTPUT_DIR / "reranking_benchmark_summary.csv"
     if "df_metrics" in locals():

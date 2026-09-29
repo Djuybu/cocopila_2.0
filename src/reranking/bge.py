@@ -13,8 +13,12 @@ class CrossEncoderReranker(BaseReranker):
 
     def load_model(self):
         if self.model is None:
+            import torch
             from sentence_transformers import CrossEncoder
-            self.model = CrossEncoder(self.model_name, device=self.device)
+            device = self.device
+            if device and str(device).startswith("cuda") and not torch.cuda.is_available():
+                device = "cpu"
+            self.model = CrossEncoder(self.model_name, device=device)
 
     def rerank(self, query, candidates, top_k=None):
         if top_k is not None and top_k < 0:

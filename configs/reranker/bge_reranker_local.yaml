@@ -1,0 +1,6 @@
+reranker:
+  enabled: true
+  type: bge
+  model: BAAI/bge-reranker-v2-m3
+  device: cpu
+  batch_size: 8

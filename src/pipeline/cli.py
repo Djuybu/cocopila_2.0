@@ -17,6 +17,20 @@ def main(command):
         parser.add_argument("--output-dir", required=True, type=Path)
         parser.add_argument("--ks", nargs="+", type=int, default=[20, 50, 100, 200])
         parser.add_argument("--registry", type=Path, help="Run registry for internal-to-official chunk mapping")
+    elif command == "evaluate_f2":
+        parser.add_argument("--handoff-dir", "--run-dir", dest="run_dir", type=Path)
+        parser.add_argument("--predictions", "--submission", dest="predictions", type=Path)
+        parser.add_argument("--candidates", type=Path)
+        parser.add_argument("--labels", "--ground-truth", dest="labels", type=Path)
+        parser.add_argument("--top-k", type=int)
+        parser.add_argument("--threshold", type=float)
+        parser.add_argument("--fallback", type=int)
+        parser.add_argument("--max-chunks", type=int)
+        parser.add_argument("--registry", type=Path)
+        parser.add_argument("--output-csv", type=Path)
+        parser.add_argument("--output-json", type=Path)
+        parser.add_argument("--zero-division", type=float, default=0.0)
+        parser.add_argument("--quiet", action="store_true")
     elif command == "pack_submission":
         parser.add_argument("--input", "-i", required=True, type=Path)
         parser.add_argument("--output", "-o", required=True, type=Path)
@@ -70,6 +84,10 @@ def main(command):
         from src.utils.io import read_json
         mapping = read_json(args.registry)["internal_to_official"] if args.registry else None
         result = evaluate_retrieval_files(args.candidates, args.labels, args.output_dir, args.ks, mapping)["macro"]
+    elif command == "evaluate_f2":
+        from scripts.evaluate_f2 import run_evaluation_cli
+        report = run_evaluation_cli(args)
+        result = report["macro"]
     elif command == "pack_submission":
         from src.submission.validator import SubmissionValidator
         from src.submission.zipper import pack_submission
