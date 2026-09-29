@@ -1,0 +1,14 @@
+# P2-08: Cross-Encoder Reranker Fine-Tuning Configuration
+training:
+  model_name: BAAI/bge-reranker-v2-m3
+  output_dir: checkpoints/reranker_v1
+  epochs: 3
+  batch_size: 16
+  learning_rate: 2.0e-5
+  warmup_ratio: 0.1
+  seed: 42
+  train_data: outputs/bge_reranked_run/reranker_train_hard.jsonl
+  val_data: outputs/bge_reranked_run/candidates.jsonl
+  val_labels: outputs/bge_reranked_run/labels.json
+  evaluation_metric: macro_f2
+  save_best_model: true
