@@ -1,0 +1,16 @@
+# P3-02/03/04: document aggregation ablation + independent doc-selector tuning.
+# Consumes the P2 handoff bundle; the P2 chunk selector is never modified.
+# Paths are resolved relative to this file.
+tune_doc_selector:
+  source_run_dir: ../../outputs/p2_to_p3_handoff
+  labels_path: ../../outputs/p2_to_p3_handoff/labels.json
+  registry_path: ../../outputs/p2_to_p3_handoff/registry.json
+  output_dir: ../../outputs/p3_doc_selector
+  ablation:
+    doc_threshold: null
+    doc_fallback: 0
+    doc_max: 10
+  sweep:
+    steps: 20
+    fallbacks: [0, 1, 2, 3, 5]
+    maximums: [3, 5, 10, 15, 20]

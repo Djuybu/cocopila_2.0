@@ -1,1 +1,1 @@
-run_id,split,archive,score,notes
+run_id,split,archive,git_commit,config,model,local_score,public_score,private_score,notes

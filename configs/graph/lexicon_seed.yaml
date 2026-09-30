@@ -1,0 +1,53 @@
+# P3-09 SEED lexicon — intentionally MINIMAL hand-curated examples only.
+#
+# This is NOT a medical ontology and must not be treated as a clinical
+# authority. Replace/extend it with an official dictionary (e.g. an
+# ICD/SNOMED/UMLS subset) before drawing medical conclusions. Abbreviations are
+# ambiguous in general (e.g. "MI"); they are included only as seed examples.
+version: seed-1
+entities:
+  nhoi_mau_co_tim:
+    type: disease
+    name: nhồi máu cơ tim
+    aliases: ["nhồi máu cơ tim", "myocardial infarction"]
+    abbreviations: ["NMCT"]
+  tang_huyet_ap:
+    type: disease
+    name: tăng huyết áp
+    aliases: ["tăng huyết áp", "hypertension"]
+    abbreviations: ["THA"]
+  dai_thao_duong:
+    type: disease
+    name: đái tháo đường
+    aliases: ["đái tháo đường", "diabetes mellitus"]
+    abbreviations: ["ĐTĐ"]
+  aspirin:
+    type: drug
+    name: aspirin
+    aliases: ["aspirin", "acetylsalicylic acid"]
+    abbreviations: ["ASA"]
+  metformin:
+    type: drug
+    name: metformin
+    aliases: ["metformin"]
+    abbreviations: []
+  dau_nguc:
+    type: symptom
+    name: đau ngực
+    aliases: ["đau ngực", "chest pain"]
+    abbreviations: []
+  kho_tho:
+    type: symptom
+    name: khó thở
+    aliases: ["khó thở", "dyspnea", "shortness of breath"]
+    abbreviations: []
+  statin:
+    type: treatment
+    name: statin
+    aliases: ["statin", "statin therapy"]
+    abbreviations: []
+relations:
+  TREATS:
+    cues: ["điều trị", "treats", "được chỉ định cho"]
+  HAS_SYMPTOM:
+    cues: ["gây", "biểu hiện", "causes"]

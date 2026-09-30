@@ -1,0 +1,10 @@
+# P3-01: build/validate the stable chunk -> parent-document mapping.
+# The corpus is authoritative; the P2 handoff registry must agree or the run fails.
+# Paths are resolved relative to this file.
+hierarchy:
+  corpus_dir: ../../data/processed/prototype
+  documents_path: ../../data/processed/prototype/documents.json
+  chunks_path: ../../data/processed/prototype/chunks.json
+  handoff_dir: ../../outputs/p2_to_p3_handoff
+  output_dir: ../../outputs/p3_hierarchy
+  allow_registry_superset: false
