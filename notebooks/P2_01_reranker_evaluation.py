@@ -183,8 +183,7 @@ from src.pipeline.reranker_benchmark import benchmark_reranking
 
 if HANDOFF_DIR.exists():
     if OUTPUT_DIR.exists():
-        import shutil
-        shutil.rmtree(OUTPUT_DIR)
+        raise FileExistsError(OUTPUT_DIR)
     logger.info(f"Running reranking benchmark from {HANDOFF_DIR} -> {OUTPUT_DIR}...")
     report = benchmark_reranking(
         HANDOFF_DIR,
@@ -309,4 +308,3 @@ if report is not None:
         df_metrics.to_csv(summary_path, index=False)
         logger.info(f"Saved metrics summary CSV to: {summary_path.resolve()}")
     print("\nEvaluation successfully completed! All artifacts generated in:", OUTPUT_DIR.resolve())
-

@@ -72,6 +72,7 @@ from src.utils.io import read_json, write_json
 
 # Find available prepared datasets
 data_dir_candidates = [
+    Path(os.environ.get("P2_DATA_DIR", str(WORKING_DIR / "data" / "processed" / "mmedc_p1_fourlang"))),
     WORKING_DIR / "data" / "processed",
     WORKING_DIR / "outputs" / "bge_reranked_run",
     Path("outputs/bge_reranked_run").resolve(),
@@ -141,18 +142,9 @@ train_pairs = generate_reranker_pairs(
     seed=42,
 )
 
-# If train split is empty (e.g. run dir only has val), generate for all available queries
+# Do not repurpose validation queries as training examples.
 if not train_pairs:
-    print("Notice: No queries tagged as 'train' found, generating pairs for all available queries...")
-    train_pairs = generate_reranker_pairs(
-        queries=queries,
-        chunks=chunks,
-        labels=labels,
-        split_info=split_info,
-        target_split=None,
-        neg_ratio=NEG_RATIO,
-        seed=42,
-    )
+    raise ValueError("No training queries available; use a dataset with document-disjoint train/val splits.")
 
 train_stats = report_data_statistics(train_pairs)
 

@@ -292,6 +292,47 @@ Nhiều internal chunks cùng một official chunk được gộp trước selec
 Threshold mặc định null vì điểm RRF/BM25/cross-encoder khác thang đo. Hãy chọn
 threshold trên validation set; không coi raw reranker scores là xác suất đã calibrate.
 
+### P2 selector tuning và fine-tuning
+
+Trong prototype, labels được dùng trực tiếp làm ground truth cho training,
+threshold tuning và evaluation. Metadata nguồn trong các gói bàn giao được giữ nguyên.
+
+`run_p2_full_pipeline()` và `notebooks/P2_full_pipeline.ipynb` ghi thêm
+`selector_cv_report.json`: mỗi fold chọn threshold/fallback/max trên các query
+train rồi đánh giá trên query held-out. `best_chunk_selector.yaml` chứa cấu hình
+chọn trên toàn bộ labels; điểm trong file này là điểm tuning. Điểm out-of-fold
+nằm trong `selector_cv_report.json`, được đưa vào ZIP P3 cùng checksum.
+
+Bootstrap threshold tuning lấy mẫu query có hoàn lại và đánh giá trên query
+out-of-bag. Khoảng tin cậy dùng percentile bootstrap theo query; khoảng của
+threshold đã chọn là có điều kiện trên threshold đó.
+
+Fine-tuning cần extra training:
+
+```bash
+python -m pip install -e ".[training,test]"
+python scripts/generate_training_data.py --data-dir data/processed/mmedc_p1_fourlang \
+  --target-split train --output outputs/reranker_train.jsonl \
+  --report outputs/reranker_train_stats.json
+python scripts/finetune_reranker.py --train-data outputs/reranker_train.jsonl \
+  --output-dir checkpoints/reranker_v1 --epochs 3 --lr 2e-5
+```
+
+Để chọn checkpoint bằng validation F2, thêm `--val-data <candidates.jsonl>`.
+CLI tự đọc `labels.json`, `queries.json`, `registry.json` cùng thư mục;
+có thể thay bằng `--val-labels`, `--val-queries`, `--val-registry`.
+Validation queries và mọi document trong validation candidates phải tách khỏi
+training pairs. Generator dùng split report hoặc split tags, giới hạn cả random
+và explicit negatives trong split, và kiểm tra leakage trước khi ghi kết quả.
+Không tự chuyển một gói chỉ có validation thành training data.
+
+Training truyền learning rate/warmup vào model, đánh giá mỗi epoch, lưu và nạp
+lại checkpoint tốt nhất theo Macro Chunk F2. `training_manifest.json` ghi cả
+baseline và checkpoint metrics; `training_config.yaml` ghi cấu hình chạy.
+`--dry-run` chỉ kiểm tra dữ liệu/cấu hình, không tạo điểm validation.
+Output P2, ZIP P3 và thư mục checkpoint phải dùng đường dẫn mới khi chạy lại;
+code không tự xóa kết quả cũ.
+
 ## Evaluate
 
 Ground truth phải đủ đúng tập query của run và dùng official IDs:

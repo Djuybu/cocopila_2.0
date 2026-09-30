@@ -5,12 +5,12 @@ query folds or bootstrap iterations, selecting a stable threshold with mean/std 
 """
 from collections import defaultdict
 import math
-from pathlib import Path
 import random
 import numpy as np
 import pandas as pd
 
 from src.data.adapter import official_candidates
+from src.data.schema import unique_ids
 from src.evaluation.fbeta import classification_metrics
 from src.scoring.chunk_selector import select_ids
 from src.scoring.doc_aggregation import candidate_score
@@ -25,6 +25,8 @@ def kfold_query_split(query_ids, n_folds=5, seed=42):
     sorted_qids = sorted(list(set(query_ids)))
     if len(sorted_qids) < 2:
         raise ValueError("At least 2 queries required for K-fold split")
+    if type(n_folds) is not int or n_folds < 2:
+        raise ValueError("n_folds must be at least 2")
 
     effective_folds = min(n_folds, len(sorted_qids))
     rng = random.Random(seed)
@@ -39,13 +41,16 @@ def kfold_query_split(query_ids, n_folds=5, seed=42):
     for f_idx in range(effective_folds):
         val_set = set(folds[f_idx])
         train_set = [qid for qid in shuffled if qid not in val_set]
-        splits.append((train_set, list(val_set)))
+        splits.append((train_set, sorted(val_set)))
 
     return splits
 
 
-def bootstrap_query_split(query_ids, n_rounds=20, val_ratio=0.3, seed=42):
-    """Generate bootstrap resampled splits.
+def bootstrap_query_split(query_ids, n_rounds=20, val_ratio=None, seed=42):
+    """Sample training queries with replacement; validate on out-of-bag queries.
+
+    By default draw N queries. val_ratio optionally controls the expected OOB
+    fraction through the draw count, rather than forcing a validation size.
 
     Returns:
         list of tuples: [(train_qids, val_qids), ...]
@@ -54,20 +59,35 @@ def bootstrap_query_split(query_ids, n_rounds=20, val_ratio=0.3, seed=42):
     if len(sorted_qids) < 2:
         raise ValueError("At least 2 queries required for bootstrap split")
 
-    val_size = max(1, int(math.ceil(len(sorted_qids) * val_ratio)))
-    if val_size >= len(sorted_qids):
-        val_size = len(sorted_qids) - 1
+    if type(n_rounds) is not int or n_rounds < 1:
+        raise ValueError("n_rounds must be positive")
+    sample_size = len(sorted_qids)
+    if val_ratio is not None:
+        if not 0 < val_ratio < 1:
+            raise ValueError("val_ratio must be between 0 and 1")
+        sample_size = max(1, round(math.log(val_ratio) / math.log(1 - 1 / len(sorted_qids))))
 
     rng = random.Random(seed)
     splits = []
     for _ in range(n_rounds):
-        shuffled = list(sorted_qids)
-        rng.shuffle(shuffled)
-        val_set = set(shuffled[:val_size])
-        train_set = [qid for qid in shuffled if qid not in val_set]
-        splits.append((train_set, list(val_set)))
+        for attempt in range(1000):
+            train_sample = rng.choices(sorted_qids, k=sample_size)
+            val_set = set(sorted_qids) - set(train_sample)
+            if val_set:
+                splits.append((train_sample, sorted(val_set)))
+                break
+        else:
+            raise ValueError("Unable to sample a nonempty out-of-bag validation set")
 
     return splits
+
+
+def _bootstrap_mean_interval(values, seed=42):
+    """Percentile interval for a mean, resampling query observations."""
+    values = np.asarray(values, dtype=float)
+    rng = np.random.default_rng(seed)
+    means = [float(np.mean(rng.choice(values, size=len(values), replace=True))) for _ in range(1000)]
+    return [round(float(v), 5) for v in np.quantile(means, [0.025, 0.975])]
 
 
 def cross_validate_threshold(
@@ -92,6 +112,8 @@ def cross_validate_threshold(
         tuple: (cv_df, report)
     """
     mapping = internal_to_official or {}
+    if unique_ids(scored_records, "id") != unique_ids(labels, "id"):
+        raise ValueError("Candidate and label query IDs must match exactly")
     label_map = {row["id"]: set(row.get("relevant_chunks", [])) for row in labels}
     all_query_ids = list(label_map.keys())
     num_queries = len(all_query_ids)
@@ -114,6 +136,8 @@ def cross_validate_threshold(
 
     # Grid of thresholds
     if thresholds is None:
+        if steps < 1:
+            raise ValueError("steps must be positive")
         if all_scores:
             s_min = min(all_scores) if min_th is None else float(min_th)
             s_max = max(all_scores) if max_th is None else float(max_th)
@@ -125,6 +149,8 @@ def cross_validate_threshold(
         else:
             thresholds = [0.0, 0.5]
 
+    if not thresholds:
+        raise ValueError("Threshold grid must not be empty")
     effective_max = 999999 if max_chunks is None else int(max_chunks)
 
     # Generate splits
@@ -200,6 +226,7 @@ def cross_validate_threshold(
     # Out-of-fold generalization test: tune on train, test on val
     oof_val_f2s = []
     oof_chosen_ths = []
+    oof_query_f2s = defaultdict(list)
     for train_qids, val_qids in splits:
         # Find best th on train
         best_train_th = None
@@ -213,9 +240,12 @@ def cross_validate_threshold(
         # Score on val
         v_f2 = sum(query_th_metrics[best_train_th][qid]["f2"] for qid in val_qids) / len(val_qids)
         oof_val_f2s.append(v_f2)
+        for qid in val_qids:
+            oof_query_f2s[qid].append(query_th_metrics[best_train_th][qid]["f2"])
 
     best_stable_row = cv_df.iloc[0].to_dict()
     pure_f2_row = cv_df.sort_values(by="mean_f2", ascending=False).iloc[0].to_dict()
+    oof_values = [float(np.mean(values)) for values in oof_query_f2s.values()]
 
     report = {
         "method": method,
@@ -227,10 +257,10 @@ def cross_validate_threshold(
             "threshold": best_stable_row["threshold"],
             "mean_f2": best_stable_row["mean_f2"],
             "std_f2": best_stable_row["std_f2"],
-            "confidence_interval_95": [
-                round(max(0.0, best_stable_row["mean_f2"] - 1.96 * best_stable_row["std_f2"]), 5),
-                round(min(1.0, best_stable_row["mean_f2"] + 1.96 * best_stable_row["std_f2"]), 5),
-            ],
+            "confidence_interval_95": _bootstrap_mean_interval(
+                [query_th_metrics[best_stable_row["threshold"]][qid]["f2"] for qid in all_query_ids], seed),
+            "confidence_interval_method": "query_bootstrap_percentile_fixed_threshold",
+            "evaluation_scope": "threshold_selection_on_supplied_labels",
             "stability_score": best_stable_row["stability_score"],
             "mean_precision": best_stable_row["mean_precision"],
             "mean_recall": best_stable_row["mean_recall"],
@@ -242,11 +272,57 @@ def cross_validate_threshold(
             "std_f2": pure_f2_row["std_f2"],
         },
         "out_of_fold_generalization": {
-            "mean_oof_f2": round(float(np.mean(oof_val_f2s)), 5),
+            "mean_oof_f2": round(float(np.mean(oof_values)), 5),
             "std_oof_f2": round(float(np.std(oof_val_f2s)), 5),
             "chosen_thresholds": oof_chosen_ths,
+            "confidence_interval_95": _bootstrap_mean_interval(oof_values, seed),
+            "evaluated_query_count": len(oof_values),
         },
         "cv_table": cv_df.to_dict(orient="records"),
     }
 
     return cv_df, report
+
+
+def cross_validate_selector(scored_records, labels, *, thresholds=None,
+                            fallbacks=None, maximums=None, n_folds=5, seed=42,
+                            internal_to_official=None, chunk_to_doc=None):
+    """Tune all selector parameters on training folds and score held-out queries."""
+    from src.scoring.sweep import sweep_chunk_selector
+    from src.evaluation.evaluate_f2 import evaluate_candidate_selection
+
+    query_ids = unique_ids(labels, "id")
+    if unique_ids(scored_records, "id") != query_ids:
+        raise ValueError("Candidate and label query IDs must match exactly")
+    if len(query_ids) < 2:
+        return {"status": "insufficient_queries", "query_count": len(query_ids)}
+    by_query = {row["id"]: row for row in scored_records}
+    by_label = {row["id"]: row for row in labels}
+    folds, per_query = [], {}
+    for train_ids, val_ids in kfold_query_split(query_ids, n_folds, seed):
+        best, _, _ = sweep_chunk_selector(
+            [by_query[qid] for qid in train_ids], [by_label[qid] for qid in train_ids],
+            thresholds=thresholds, fallbacks=fallbacks, maximums=maximums,
+            internal_to_official=internal_to_official, chunk_to_doc=chunk_to_doc,
+        )
+        val_records = [by_query[qid] for qid in val_ids]
+        if chunk_to_doc is not None:
+            val_records = [{**row, "candidates": official_candidates(
+                row["candidates"], internal_to_official or {}, chunk_to_doc)} for row in val_records]
+        evaluation = evaluate_candidate_selection(
+            val_records, [by_label[qid] for qid in val_ids],
+            threshold=best["chunk_threshold"], fallback=best["chunk_fallback"],
+            max_chunks=best["chunk_max"], internal_to_official=internal_to_official,
+        )
+        per_query.update(evaluation["per_query"])
+        folds.append({"train_query_ids": train_ids, "val_query_ids": val_ids,
+                      "selector": best, "validation_macro": evaluation["macro"]})
+    return {
+        "status": "complete", "method": "kfold", "n_splits": len(folds),
+        "query_count": len(query_ids), "seed": seed,
+        "evaluation_scope": "out_of_fold_selector_tuning",
+        "macro": {name: sum(row[name] for row in per_query.values()) / len(per_query)
+                  for name in ("precision", "recall", "f1", "f2")},
+        "confidence_interval_95": _bootstrap_mean_interval([row["f2"] for row in per_query.values()], seed),
+        "per_query": per_query, "folds": folds,
+    }

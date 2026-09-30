@@ -154,6 +154,8 @@ def run_evaluation_cli(args):
     else:
         candidates = None
 
+    if labels_path is None:
+        raise ValueError("Provide --labels or --handoff-dir")
     if not labels_path.exists():
         raise FileNotFoundError(f"Labels file not found: {labels_path}")
     labels = load_records(labels_path)
@@ -173,7 +175,7 @@ def run_evaluation_cli(args):
     else:
         # Default top-k to 1 if neither top_k nor threshold is set
         top_k = args.top_k
-        if top_k is None and args.threshold is None:
+        if top_k is None and all(value is None for value in (args.threshold, args.fallback, args.max_chunks)):
             top_k = 1
 
         report = evaluate_candidate_selection(

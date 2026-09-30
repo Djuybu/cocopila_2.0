@@ -11,6 +11,7 @@ import random
 import numpy as np
 
 from src.data.adapter import official_candidates
+from src.data.schema import unique_ids
 from src.scoring.doc_aggregation import candidate_score
 from src.utils.io import read_json, write_json, write_jsonl
 
@@ -65,6 +66,10 @@ def mine_hard_negatives(
         tuple: (hard_negatives, mining_summary)
     """
     mapping = internal_to_official or {}
+    if type(max_negatives_per_query) is not int or max_negatives_per_query < 0:
+        raise ValueError("max_negatives_per_query must be nonnegative")
+    if unique_ids(candidates_records, "id") != unique_ids(labels, "id"):
+        raise ValueError("Candidate and label query IDs must match exactly")
     label_map = {row["id"]: set(row.get("relevant_chunks", [])) for row in labels}
 
     query_text_map = {}
@@ -100,6 +105,8 @@ def mine_hard_negatives(
 
         q_mined = 0
         for rank, c in enumerate(sorted_cands, 1):
+            if q_mined >= max_negatives_per_query:
+                break
             total_candidates_examined += 1
             cid = c.get("chunk_id")
             score = candidate_score(c)
@@ -183,7 +190,7 @@ def validate_hard_negatives(hard_negatives, labels, random_negatives=None):
         "total_verified": len(hard_negatives),
         "avg_hard_negative_score": round(avg_hard_score, 4),
         "avg_random_negative_score": round(avg_random_score, 4) if avg_random_score is not None else None,
-        "score_advantage_verified": similarity_advantage if similarity_advantage is not None else True,
+        "score_advantage_verified": similarity_advantage,
     }
 
 
@@ -200,6 +207,8 @@ def merge_training_data(base_train_pairs, hard_negatives, hard_neg_ratio=0.5, se
         list of dicts: Enriched training dataset.
     """
     rng = random.Random(seed)
+    if not 0 <= hard_neg_ratio <= 1:
+        raise ValueError("hard_neg_ratio must be between 0 and 1")
 
     positives = [p for p in base_train_pairs if p["label"] == 1.0]
     random_negs = [p for p in base_train_pairs if p["label"] == 0.0]
@@ -227,14 +236,25 @@ def merge_training_data(base_train_pairs, hard_negatives, hard_neg_ratio=0.5, se
             total_negs_for_q = len(h_pool)
 
         num_hard = int(round(total_negs_for_q * hard_neg_ratio))
-        num_rand = total_negs_for_q - num_hard
-
+        positive_ids = {p["chunk_id"] for p in positives if p["query_id"] == qid}
+        if any(p["chunk_id"] in positive_ids for p in h_pool):
+            raise ValueError(f"Hard negative contaminates positives for query {qid}")
         selected = h_pool[:num_hard]
         # Fill remaining with random negatives
-        selected.extend(r_pool[:num_rand])
+        selected_ids = {p["chunk_id"] for p in selected}
+        for p in r_pool:
+            if len(selected) >= total_negs_for_q:
+                break
+            if p["chunk_id"] not in selected_ids:
+                selected.append(p)
+                selected_ids.add(p["chunk_id"])
         # If not enough random, take more hard
-        if len(selected) < total_negs_for_q and len(h_pool) > num_hard:
-            selected.extend(h_pool[num_hard:num_hard + (total_negs_for_q - len(selected))])
+        for p in h_pool[num_hard:]:
+            if len(selected) >= total_negs_for_q:
+                break
+            if p["chunk_id"] not in selected_ids:
+                selected.append(p)
+                selected_ids.add(p["chunk_id"])
 
         merged.extend(selected)
 

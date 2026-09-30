@@ -3,12 +3,10 @@
 Converts queries, corpus chunks, and labels into high-quality positive and negative pairs
 (reranker_train.jsonl) while strictly enforcing document-disjoint split boundaries and zero leakage.
 """
-from collections import defaultdict
-import json
 from pathlib import Path
 import random
 
-from src.utils.io import read_json, write_json, write_jsonl
+from src.utils.io import write_jsonl
 
 
 def generate_reranker_pairs(
@@ -38,6 +36,8 @@ def generate_reranker_pairs(
             query_id, chunk_id, doc_id, query, text, label (1.0/0.0), split, metadata.
     """
     rng = random.Random(seed)
+    if type(neg_ratio) is not int or neg_ratio < 0:
+        raise ValueError("neg_ratio must be a nonnegative integer")
 
     chunk_map = {row["chunk_id"]: row for row in chunks}
     label_map = {row["id"]: row for row in labels}
@@ -46,27 +46,43 @@ def generate_reranker_pairs(
     query_split_map = {}
     doc_split_map = {}
     if split_info:
-        query_split_map = split_info.get("queries", {})
-        doc_split_map = split_info.get("documents", {})
+        query_split_map = dict(split_info.get("queries", {}))
+        doc_split_map = dict(split_info.get("documents", {}))
+
+    def assign(mapping, key, split):
+        if split is None:
+            return
+        if key in mapping and mapping[key] != split:
+            raise ValueError(f"Conflicting split assignments for {key}")
+        mapping[key] = split
+
+    for c in chunks:
+        assign(doc_split_map, c["doc_id"], c.get("split"))
+    # When only queries have split tags, infer document membership from positives.
+    for q in queries:
+        qid = q.get("id", q.get("query_id"))
+        assign(query_split_map, qid, q.get("split"))
+        for cid in label_map.get(qid, {}).get("relevant_chunks", []):
+            if cid in chunk_map:
+                assign(doc_split_map, chunk_map[cid]["doc_id"], query_split_map.get(qid))
+    if target_split is not None and not query_split_map:
+        raise ValueError("Split assignments required; supply split_report.json or explicitly use target_split=None")
 
     active_queries = []
     for q in queries:
         qid = q.get("id", q.get("query_id"))
-        q_split = q.get("split") or query_split_map.get(qid)
-        if target_split is not None and q_split is not None and q_split != target_split:
+        q_split = query_split_map.get(qid)
+        if target_split is not None and q_split is None:
+            raise ValueError(f"Missing split assignment for query {qid}")
+        if target_split is not None and q_split != target_split:
             continue
         active_queries.append(q)
 
     # Determine corpus pool of candidate negatives within the target split
-    if target_split is not None and doc_split_map:
+    if target_split is not None:
         pool_chunk_ids = [
             c["chunk_id"] for c in chunks
             if doc_split_map.get(c["doc_id"]) == target_split
-        ]
-    elif target_split is not None and any("split" in c for c in chunks):
-        pool_chunk_ids = [
-            c["chunk_id"] for c in chunks
-            if c.get("split") == target_split
         ]
     else:
         pool_chunk_ids = [c["chunk_id"] for c in chunks]
@@ -82,6 +98,9 @@ def generate_reranker_pairs(
             continue
 
         pos_set = set(pos_chunk_ids)
+        pool_set = set(pool_chunk_ids)
+        if target_split is not None and not pos_set <= pool_set:
+            raise ValueError(f"Positive chunks cross split boundary for query {qid}")
         # 1. Create Positive Pairs
         for cid in pos_chunk_ids:
             c = chunk_map[cid]
@@ -102,7 +121,7 @@ def generate_reranker_pairs(
         # Check if query already has pre-identified negative chunks
         explicit_neg_ids = [
             cid for cid in q.get("negative_chunk_ids", [])
-            if cid in chunk_map and cid not in pos_set
+            if cid in pool_set and cid not in pos_set
         ]
 
         needed_negs = len(pos_chunk_ids) * neg_ratio
@@ -149,7 +168,7 @@ def validate_no_leakage(train_pairs, val_pairs, split_info=None):
 
     Checks:
     - Query ID leakage: Train and val sets must have completely disjoint query IDs.
-    - Document leakage: No document containing positive chunks in train may appear in val.
+    - Document leakage: No document in train may appear in val, including negatives.
 
     Raises:
         ValueError: If any leakage is detected.
@@ -160,19 +179,29 @@ def validate_no_leakage(train_pairs, val_pairs, split_info=None):
     if q_overlap:
         raise ValueError(f"Query ID leakage detected between train and val: {sorted(list(q_overlap))[:5]}")
 
-    # Document-level positive leakage
-    train_pos_docs = {p["doc_id"] for p in train_pairs if p["label"] == 1.0 and p.get("doc_id")}
-    val_pos_docs = {p["doc_id"] for p in val_pairs if p["label"] == 1.0 and p.get("doc_id")}
-    doc_overlap = train_pos_docs & val_pos_docs
+    # Every document must stay in one split, regardless of its pair label.
+    train_docs = {p["doc_id"] for p in train_pairs if p.get("doc_id")}
+    val_docs = {p["doc_id"] for p in val_pairs if p.get("doc_id")}
+    doc_overlap = train_docs & val_docs
     if doc_overlap:
-        raise ValueError(f"Document leakage detected (positives in both train and val): {sorted(list(doc_overlap))[:5]}")
+        raise ValueError(f"Document leakage detected between train and val: {sorted(list(doc_overlap))[:5]}")
+    if split_info:
+        for expected, pairs in (("train", train_pairs), ("val", val_pairs)):
+            for pair in pairs:
+                for field, assignments in (("query_id", split_info.get("queries", {})),
+                                           ("doc_id", split_info.get("documents", {}))):
+                    actual = assignments.get(pair.get(field))
+                    if actual is not None and actual != expected:
+                        raise ValueError(f"Split leakage detected: {pair.get(field)} belongs to {actual}, not {expected}")
 
     return {
         "status": "clean",
         "train_queries": len(train_qids),
         "val_queries": len(val_qids),
-        "train_pos_docs": len(train_pos_docs),
-        "val_pos_docs": len(val_pos_docs),
+        "train_docs": len(train_docs),
+        "val_docs": len(val_docs),
+        "train_pos_docs": len({p["doc_id"] for p in train_pairs if p.get("label") == 1.0 and p.get("doc_id")}),
+        "val_pos_docs": len({p["doc_id"] for p in val_pairs if p.get("label") == 1.0 and p.get("doc_id")}),
         "leakage_count": 0,
     }
 

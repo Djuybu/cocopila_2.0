@@ -75,12 +75,13 @@ from src.training.finetune import (
 )
 from src.utils.io import read_json, write_json
 
-RUN_DIR = WORKING_DIR / "outputs" / "bge_reranked_run"
+RUN_DIR = Path(os.environ.get("P2_VAL_RUN_DIR", str(WORKING_DIR / "outputs" / "bge_reranked_run")))
 if not RUN_DIR.exists():
     RUN_DIR = Path("outputs/bge_reranked_run").resolve()
 
 # Find training data
 train_data_candidates = [
+    Path(os.environ.get("P2_TRAIN_DATA", str(WORKING_DIR / "outputs" / "reranker_train.jsonl"))),
     RUN_DIR / "reranker_train_hard.jsonl",
     RUN_DIR / "reranker_train_with_hard_negs.jsonl",
     RUN_DIR / "reranker_train.jsonl",
@@ -120,6 +121,8 @@ val_candidates_file = RUN_DIR / "candidates.jsonl"
 val_labels_file = RUN_DIR / "labels.json"
 val_records = load_records(val_candidates_file) if val_candidates_file.exists() else None
 val_labels = read_json(val_labels_file) if val_labels_file.exists() else None
+val_queries = read_json(RUN_DIR / "queries.json") if (RUN_DIR / "queries.json").exists() else None
+val_registry = read_json(RUN_DIR / "registry.json") if (RUN_DIR / "registry.json").exists() else {}
 
 # %% Cell 3: Configure Hyperparameters
 MODEL_NAME = "BAAI/bge-reranker-v2-m3"
@@ -162,6 +165,9 @@ if not cuda_avail and len(train_pairs) > 50:
         train_pairs=train_pairs[:40],
         val_records=val_records,
         val_labels=val_labels,
+        val_queries=val_queries,
+        internal_to_official=val_registry.get("internal_to_official"),
+        chunk_to_doc=val_registry.get("chunk_to_doc"),
         epochs=1,
         batch_size=4,
         lr=LEARNING_RATE,
@@ -172,14 +178,17 @@ else:
         train_pairs=train_pairs,
         val_records=val_records,
         val_labels=val_labels,
+        val_queries=val_queries,
+        internal_to_official=val_registry.get("internal_to_official"),
+        chunk_to_doc=val_registry.get("chunk_to_doc"),
         epochs=EPOCHS,
         batch_size=BATCH_SIZE,
         lr=LEARNING_RATE,
     )
 
-# Save config.yaml to checkpoint directory
+# Keep the model's config.yaml intact; training settings have their own file.
 CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
-with open(CHECKPOINT_DIR / "config.yaml", "w", encoding="utf-8") as f:
+with open(CHECKPOINT_DIR / "training_config.yaml", "x", encoding="utf-8") as f:
     yaml.dump(training_cfg, f, default_flow_style=False)
 
 print(f"\nTraining completed! Manifest saved to: {CHECKPOINT_DIR / 'training_manifest.json'}")
@@ -195,6 +204,9 @@ if val_records and val_labels:
         val_records=val_records,
         labels=val_labels,
         threshold=0.5,
+        queries=val_queries,
+        internal_to_official=val_registry.get("internal_to_official"),
+        chunk_to_doc=val_registry.get("chunk_to_doc"),
     )
     print(f"  • Fine-Tuned Checkpoint Macro F2     : {ft_metrics['macro_f2']:.4f}")
     print(f"  • Fine-Tuned Checkpoint Macro Recall : {ft_metrics['macro_recall']:.4f}")
@@ -209,12 +221,12 @@ print("  CHECKLIST VERIFICATION: P2-08 (Reranker Checkpoint v1)")
 print("=" * 70)
 c1 = CHECKPOINT_DIR.exists()
 c2 = (CHECKPOINT_DIR / "training_manifest.json").exists()
-c3 = (CHECKPOINT_DIR / "config.yaml").exists()
+c3 = (CHECKPOINT_DIR / "training_config.yaml").exists() and (CHECKPOINT_DIR / "config.json").exists()
 c4 = manifest.get("seed") == SEED
 
 print(f"  [✓] Có thư mục checkpoint: {c1} ({CHECKPOINT_DIR})")
 print(f"  [✓] Có file training_manifest.json: {c2}")
-print(f"  [✓] Có file config.yaml: {c3}")
+print(f"  [✓] Có model config và training_config.yaml: {c3}")
 print(f"  [✓] Cấu hình và seed tái lập được (seed={manifest.get('seed')}): {c4}")
 
 if c1 and c2 and c3 and c4:

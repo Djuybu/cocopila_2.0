@@ -2,18 +2,18 @@
 
 Supports training and fine-tuning cross-encoder models (e.g. BAAI/bge-reranker-v2-m3)
 on positive and hard negative pairs, persisting checkpoints, training configs, and seed,
-and validating that validation F2/Recall meets or exceeds baseline.
+and reporting validation F2/Recall for the best checkpoint and the baseline.
 """
-from collections import defaultdict
 import logging
+import math
 from pathlib import Path
 import random
-import yaml
 
-from src.data.loader import load_records
-from src.evaluation.fbeta import classification_metrics
-from src.scoring.chunk_selector import select_ids
-from src.utils.io import read_json, write_json
+from src.data.schema import unique_ids
+from src.data.adapter import official_candidates
+from src.evaluation.evaluate_f2 import evaluate_candidate_selection
+from src.training.data_generator import validate_no_leakage
+from src.utils.io import write_json
 
 logger = logging.getLogger("finetune_reranker")
 
@@ -73,55 +73,98 @@ def evaluate_reranker_on_validation(
     max_chunks=None,
     internal_to_official=None,
     chunk_to_doc=None,
+    queries=None,
 ):
     """Evaluate reranker model on validation candidates against ground truth labels.
 
     Returns:
         dict: Macro precision, recall, f1, f2.
     """
-    label_map = {row["id"]: set(row.get("relevant_chunks", [])) for row in labels}
+    query_map = _validation_queries(val_records, labels, queries)
     mapping = internal_to_official or {}
-    effective_max = 999999 if max_chunks is None else int(max_chunks)
-
-    total_p, total_r, total_f1, total_f2 = 0.0, 0.0, 0.0, 0.0
-    num_queries = len(label_map)
-    if num_queries == 0:
-        raise ValueError("Cannot evaluate on empty labels")
-
+    scored_records = []
     for row in val_records:
         qid = row["id"]
         cands = row.get("candidates", [])
-        truth_chunks = label_map.get(qid, set())
-        query_text = row.get("text", row.get("query", ""))
+        query_text = query_map[qid]
 
         # Score candidates
         pairs_to_score = [(query_text, c.get("text", "")) for c in cands]
-        if hasattr(model_or_predict_fn, "predict"):
+        if not pairs_to_score:
+            scores = []
+        elif hasattr(model_or_predict_fn, "predict"):
             scores = model_or_predict_fn.predict(pairs_to_score)
         elif callable(model_or_predict_fn):
             scores = model_or_predict_fn(pairs_to_score)
         else:
             raise TypeError("Model must have .predict method or be callable")
 
+        if len(scores) != len(cands):
+            raise ValueError("Reranker returned the wrong number of scores")
         scored_cands = []
         for c, score in zip(cands, scores):
-            cid = mapping.get(c["chunk_id"], c["chunk_id"])
-            scored_cands.append({**c, "chunk_id": cid, "score": float(score)})
-
-        selected = select_ids(scored_cands, "chunk_id", threshold, fallback, effective_max)
-        m = classification_metrics(truth_chunks, set(selected), zero_division=0.0)
-
-        total_p += m["precision"]
-        total_r += m["recall"]
-        total_f1 += m["f1"]
-        total_f2 += m["f2"]
-
+            if not math.isfinite(float(score)):
+                raise ValueError("Reranker score must be finite")
+            scored_cands.append({**c, "rerank_score": float(score)})
+        if chunk_to_doc is not None:
+            scored_cands = official_candidates(scored_cands, mapping, chunk_to_doc)
+        scored_records.append({"id": qid, "candidates": scored_cands})
+    metrics = evaluate_candidate_selection(
+        scored_records, labels, threshold=threshold, fallback=fallback,
+        max_chunks=max_chunks, internal_to_official=mapping,
+    )["macro"]
     return {
-        "macro_precision": round(total_p / num_queries, 5),
-        "macro_recall": round(total_r / num_queries, 5),
-        "macro_f1": round(total_f1 / num_queries, 5),
-        "macro_f2": round(total_f2 / num_queries, 5),
+        f"macro_{name}": round(metrics[name], 5)
+        for name in ("precision", "recall", "f1", "f2")
     }
+
+
+def _validation_queries(records, labels, queries=None):
+    record_ids = unique_ids(records, "id")
+    if not labels or record_ids != unique_ids(labels, "id"):
+        raise ValueError("Validation candidate and label query IDs must match exactly and be nonempty")
+    if isinstance(queries, dict):
+        query_map = dict(queries)
+    elif queries is not None:
+        unique_ids(queries, "id")
+        query_map = {q["id"]: q["text"] for q in queries}
+    else:
+        query_map = {row["id"]: row.get("text", row.get("query")) for row in records}
+    if set(query_map) != record_ids:
+        raise ValueError("Validation query text IDs must match candidate IDs exactly")
+    for qid, query in query_map.items():
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError(f"Missing validation query text for {qid}; supply queries.json")
+    return query_map
+
+
+def _validation_evaluator(records, labels, checkpoint_dir, **selection):
+    # Import only for training; the CPU baseline does not require this dependency.
+    try:
+        from sentence_transformers.base.evaluation.evaluator import BaseEvaluator as SentenceEvaluator
+    except ImportError:  # Sentence Transformers 3.x compatibility
+        from sentence_transformers.evaluation import SentenceEvaluator
+
+    class ChunkF2Evaluator(SentenceEvaluator):
+        primary_metric = "macro_f2"
+        greater_is_better = True
+
+        def __init__(self):
+            super().__init__()
+            self.primary_metric = "macro_f2"
+            self.best_metrics = None
+            self.best_epoch = None
+
+        def __call__(self, model, output_path=None, epoch=-1, steps=-1, **kwargs):
+            metrics = evaluate_reranker_on_validation(model, records, labels, **selection)
+            if self.best_metrics is None or metrics["macro_f2"] > self.best_metrics["macro_f2"]:
+                # Persist here as well: fit callback wiring differs across library versions.
+                model.save(str(checkpoint_dir))
+                self.best_metrics = metrics
+                self.best_epoch = epoch
+            return metrics
+
+    return ChunkF2Evaluator()
 
 
 class CrossEncoderTrainer:
@@ -164,12 +207,40 @@ class CrossEncoderTrainer:
         batch_size=16,
         lr=2e-5,
         warmup_ratio=0.1,
+        val_queries=None,
+        internal_to_official=None,
+        chunk_to_doc=None,
+        threshold=0.5,
+        fallback=0,
+        max_chunks=None,
     ):
         """Train cross-encoder on pairs and save checkpoint."""
+        if not train_pairs:
+            raise ValueError("Cannot train on empty pairs")
+        if epochs < 1 or batch_size < 1 or lr <= 0 or not 0 <= warmup_ratio <= 1:
+            raise ValueError("Invalid training hyperparameters")
+        if self.output_dir.exists():
+            raise FileExistsError(self.output_dir)
+        if (val_records is None) != (val_labels is None):
+            raise ValueError("Validation candidates and labels must be supplied together")
+        selection = dict(queries=val_queries, internal_to_official=internal_to_official,
+                         chunk_to_doc=chunk_to_doc, threshold=threshold,
+                         fallback=fallback, max_chunks=max_chunks)
+        evaluator = None
+        if val_records is not None:
+            _validation_queries(val_records, val_labels, val_queries)
+            validation_pairs = [
+                {"query_id": row["id"], "doc_id": c.get("doc_id"), "label": 0.0}
+                for row in val_records for c in row.get("candidates", [])
+            ]
+            validation_pairs.extend({"query_id": row["id"]} for row in val_records)
+            validate_no_leakage(train_pairs, validation_pairs)
+            evaluator = _validation_evaluator(val_records, val_labels, self.output_dir, **selection)
+
+        # Set reproducibility seed
         import torch
         from torch.utils.data import DataLoader
 
-        # Set reproducibility seed
         torch.manual_seed(self.seed)
         random.seed(self.seed)
 
@@ -182,21 +253,28 @@ class CrossEncoderTrainer:
         warmup_steps = int(len(train_dataloader) * epochs * warmup_ratio)
         logger.info("Beginning training: %d samples, %d epochs, %d warmup steps...", len(train_examples), epochs, warmup_steps)
 
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        baseline = evaluate_reranker_on_validation(self.model, val_records, val_labels, **selection) if evaluator else None
+        self.output_dir.mkdir(parents=True, exist_ok=False)
 
         self.model.fit(
             train_dataloader=train_dataloader,
             epochs=epochs,
             warmup_steps=warmup_steps,
+            optimizer_params={"lr": lr},
+            evaluator=evaluator,
             output_path=str(self.output_dir),
-            save_best_model=True if val_records else False,
+            save_best_model=evaluator is not None,
             show_progress_bar=True,
         )
 
         metrics = {}
-        if val_records and val_labels:
+        if evaluator is not None:
+            from sentence_transformers import CrossEncoder
+            self.model = CrossEncoder(str(self.output_dir), device=str(self.model.device))
             logger.info("Evaluating fine-tuned checkpoint on validation...")
-            metrics = evaluate_reranker_on_validation(self.model, val_records, val_labels)
+            metrics = evaluate_reranker_on_validation(self.model, val_records, val_labels, **selection)
+        else:
+            self.model.save(str(self.output_dir))
 
         # Write training manifest
         manifest = {
@@ -205,6 +283,10 @@ class CrossEncoderTrainer:
             "epochs": epochs,
             "batch_size": batch_size,
             "learning_rate": lr,
+            "warmup_ratio": warmup_ratio,
+            "best_epoch": evaluator.best_epoch if evaluator else None,
+            "baseline_metrics": baseline,
+            "validation_selector": {"threshold": threshold, "fallback": fallback, "max_chunks": max_chunks},
             "num_training_pairs": len(train_pairs),
             "output_dir": str(self.output_dir),
             "validation_metrics": metrics,

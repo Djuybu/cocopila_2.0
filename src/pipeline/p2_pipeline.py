@@ -1,7 +1,6 @@
 """Full end-to-end pipeline execution for Member 2 (P2: Reranking & Chunk Selection)."""
 import logging
 from pathlib import Path
-import shutil
 
 from src.data.loader import load_records
 from src.pipeline.handoff import validate_reranking_input
@@ -12,8 +11,8 @@ from src.scoring.sweep import (
     package_p2_to_p3_handoff,
     sweep_chunk_selector,
 )
-from src.utils.config import load_config
-from src.utils.io import read_json
+from src.scoring.cv_threshold import cross_validate_selector
+from src.utils.io import read_json, write_json
 
 
 logger = logging.getLogger("p2_pipeline")
@@ -31,6 +30,8 @@ def run_p2_full_pipeline(
     sweep_maximums=None,
     benchmark=True,
     archive_zip=True,
+    cv_folds=5,
+    seed=42,
 ):
     """Execute the complete end-to-end P2 pipeline from P1 bundle to P3 deliverables.
 
@@ -51,13 +52,24 @@ def run_p2_full_pipeline(
         if p3_handoff_dir
         else output_path / "p2_to_p3_handoff"
     )
+    if output_path == handoff_path or output_path.is_relative_to(handoff_path) or handoff_path.is_relative_to(output_path):
+        raise ValueError("P2 output must be separate from P1 input")
+    if (p3_handoff_path == handoff_path or p3_handoff_path.is_relative_to(handoff_path)
+            or handoff_path.is_relative_to(p3_handoff_path) or output_path.is_relative_to(p3_handoff_path)):
+        raise ValueError("P3 output must not contain P1 input or P2 source")
+    for path in (output_path, p3_handoff_path):
+        if path.exists():
+            raise FileExistsError(path)
+    archive_path = p3_handoff_path.parent / f"{p3_handoff_path.name}.zip"
+    if archive_zip and archive_path.exists():
+        raise FileExistsError(archive_path)
+    if type(cv_folds) is not int or cv_folds < 2:
+        raise ValueError("cv_folds must be at least 2")
 
     logger.info("Stage 1/5: Validating P1 handoff bundle at %s...", handoff_path)
     manifest = validate_reranking_input(handoff_path)
 
     logger.info("Stage 2/5: Executing Reranker scoring into %s...", output_path)
-    if output_path.exists():
-        shutil.rmtree(output_path)
 
     benchmark_report = None
     if benchmark:
@@ -92,6 +104,13 @@ def run_p2_full_pipeline(
         internal_to_official=mapping,
         chunk_to_doc=chunk_to_doc,
     )
+    best_config["evaluation_scope"] = "tuning_on_supplied_labels"
+    cv_report = cross_validate_selector(
+        scored_records, labels, thresholds=sweep_thresholds, fallbacks=sweep_fallbacks,
+        maximums=sweep_maximums, n_folds=cv_folds, seed=seed,
+        internal_to_official=mapping, chunk_to_doc=chunk_to_doc,
+    )
+    write_json(output_path / "selector_cv_report.json", cv_report)
     logger.info(
         "Optimal selector found: threshold=%s, fallback=%d, max=%d -> Macro F2=%.4f",
         best_config["chunk_threshold"],
@@ -143,6 +162,7 @@ def run_p2_full_pipeline(
             "best_config": best_config,
             "plateau_info": plateau_info,
             "fn_summary": fn_summary,
+            "cross_validation": cv_report,
         },
         "p3_handoff": {
             "output_dir": str(p3_handoff_path),

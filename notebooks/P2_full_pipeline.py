@@ -169,7 +169,7 @@ from src.pipeline.reranker_benchmark import benchmark_reranking
 
 if HANDOFF_DIR.exists() and (HANDOFF_DIR / "candidates.jsonl").exists():
     if P2_OUTPUT_DIR.exists():
-        shutil.rmtree(P2_OUTPUT_DIR)
+        raise FileExistsError(P2_OUTPUT_DIR)
 
     print(f"Scoring candidates from {HANDOFF_DIR} -> {P2_OUTPUT_DIR}...")
     report = benchmark_reranking(
@@ -228,6 +228,8 @@ if report is not None:
 # %% Cell 6: Joint Chunk Selector Sweep & F2 Optimization (P2-02, P2-03, P2-04, P2-05, P2-12)
 from src.data.loader import load_records
 from src.scoring.sweep import sweep_chunk_selector
+from src.scoring.cv_threshold import cross_validate_selector
+from src.utils.io import write_json
 
 if P2_OUTPUT_DIR.exists() and (P2_OUTPUT_DIR / "reranked.jsonl").exists():
     scored_records = load_records(P2_OUTPUT_DIR / "reranked.jsonl")
@@ -240,12 +242,20 @@ if P2_OUTPUT_DIR.exists() and (P2_OUTPUT_DIR / "reranked.jsonl").exists():
     best_config, sweep_df, plateau_info = sweep_chunk_selector(
         scored_records=scored_records,
         labels=labels,
-        thresholds=None,  # Dynamic quantiles across score distribution
+        thresholds=None,  # Dynamic grid across score distribution
         fallbacks=[0, 1, 2, 3, 5],
         maximums=[3, 5, 10, 15, 20],
         internal_to_official=mapping,
         chunk_to_doc=chunk_to_doc,
     )
+    best_config["evaluation_scope"] = "tuning_on_supplied_labels"
+    selector_cv = cross_validate_selector(
+        scored_records, labels, fallbacks=[0, 1, 2, 3, 5], maximums=[3, 5, 10, 15, 20],
+        internal_to_official=mapping, chunk_to_doc=chunk_to_doc,
+    )
+    write_json(P2_OUTPUT_DIR / "selector_cv_report.json", selector_cv)
+    if selector_cv["status"] == "complete":
+        print(f"Out-of-fold Macro F2: {selector_cv['macro']['f2']:.4f}")
 
     print("\n" + "=" * 70)
     print("      OPTIMAL CHUNK SELECTOR (MAXIMIZING MACRO F2 CHUNK)")

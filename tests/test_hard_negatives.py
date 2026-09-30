@@ -168,3 +168,26 @@ def test_cli_mine_hard_negatives_execution(candidate_pool_data, tmp_path):
     report = read_json(report_file)
     assert report["mining_summary"]["total_mined_hard_negatives"] > 0
     assert report["validation_summary"]["ground_truth_contamination"] == 0
+
+
+def test_mining_zero_budget_returns_no_negatives(candidate_pool_data):
+    records, labels = candidate_pool_data
+    negatives, summary = mine_hard_negatives(records, labels, max_negatives_per_query=0)
+    assert negatives == []
+    assert summary["total_mined_hard_negatives"] == 0
+
+
+def test_merge_fills_budget_when_hard_pool_is_empty():
+    pairs = [{"query_id": "q", "chunk_id": "positive", "label": 1.0}]
+    pairs += [{"query_id": "q", "chunk_id": f"negative{i}", "label": 0.0} for i in range(4)]
+    merged = merge_training_data(pairs, [], hard_neg_ratio=.5)
+    assert len(merged) == len(pairs)
+    assert {p["chunk_id"] for p in merged} == {p["chunk_id"] for p in pairs}
+
+
+def test_merge_deduplicates_random_and_hard_negative():
+    pairs = [{"query_id": "q", "chunk_id": "positive", "label": 1.0}]
+    pairs += [{"query_id": "q", "chunk_id": f"negative{i}", "label": 0.0} for i in range(4)]
+    merged = merge_training_data(pairs, [pairs[1]], hard_neg_ratio=.5)
+    assert len(merged) == 5
+    assert len({p["chunk_id"] for p in merged}) == 5

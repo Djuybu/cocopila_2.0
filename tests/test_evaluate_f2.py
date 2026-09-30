@@ -14,11 +14,30 @@ from src.evaluation.evaluate_f2 import (
     export_metrics_json,
     format_metrics_table,
 )
-from src.utils.io import read_json
+from src.utils.io import read_json, write_json, write_jsonl
 
 
 TOY_REFERENCE_CSV = Path(__file__).parent / "fixtures" / "toy_chunk_f2_reference.csv"
-HANDOFF_DIR = Path(__file__).resolve().parent.parent / "data" / "p1_p2_handoff_qwen3"
+
+@pytest.fixture
+def handoff_dir(tmp_path):
+    """Portable seven-query corpus with the hand-calculated ranking below."""
+    records, labels = [], []
+    for i in range(1, 8):
+        positive = f"positive_{i}"
+        ids = [f"negative_{i}_1", f"negative_{i}_2", positive]
+        if i in (1, 4):
+            ids = [positive, f"negative_{i}_1", f"negative_{i}_2"]
+        elif i in (2, 3):
+            ids = [f"negative_{i}_1", positive, f"negative_{i}_2"]
+        records.append({"id": f"q{i}", "candidates": [
+            {"chunk_id": cid, "doc_id": f"d{i}", "text": cid, "score": 3 - rank}
+            for rank, cid in enumerate(ids)
+        ]})
+        labels.append({"id": f"q{i}", "relevant_chunks": [positive]})
+    write_jsonl(tmp_path / "candidates.jsonl", records)
+    write_json(tmp_path / "labels.json", labels)
+    return tmp_path
 
 
 def test_compute_chunk_metrics_hand_calculated():
@@ -136,10 +155,10 @@ def test_edge_cases():
                                    [{"id": "q2", "relevant_chunks": []}])
 
 
-def test_evaluate_on_handoff_qwen3_top1():
+def test_evaluate_on_handoff_qwen3_top1(handoff_dir):
     """Verify exact hand-calculated Top-1 metrics on data/p1_p2_handoff_qwen3."""
-    labels_file = HANDOFF_DIR / "labels.json"
-    candidates_file = HANDOFF_DIR / "candidates.jsonl"
+    labels_file = handoff_dir / "labels.json"
+    candidates_file = handoff_dir / "candidates.jsonl"
     assert labels_file.exists() and candidates_file.exists()
 
     from src.data.loader import load_records
@@ -158,11 +177,11 @@ def test_evaluate_on_handoff_qwen3_top1():
     assert macro["f2"] == pytest.approx(2 / 7, abs=1e-6)
 
 
-def test_evaluate_on_handoff_qwen3_top2():
+def test_evaluate_on_handoff_qwen3_top2(handoff_dir):
     """Verify exact hand-calculated Top-2 metrics on data/p1_p2_handoff_qwen3."""
     from src.data.loader import load_records
-    candidates = load_records(HANDOFF_DIR / "candidates.jsonl")
-    labels = load_records(HANDOFF_DIR / "labels.json")
+    candidates = load_records(handoff_dir / "candidates.jsonl")
+    labels = load_records(handoff_dir / "labels.json")
 
     report = evaluate_candidate_selection(candidates, labels, top_k=2)
     macro = report["macro"]
@@ -205,7 +224,7 @@ def test_table_and_export_functions(tmp_path):
     assert "macro" in data and "per_query" in data
 
 
-def test_cli_execution(tmp_path):
+def test_cli_execution(tmp_path, handoff_dir):
     """Verify execution of scripts/evaluate_f2.py CLI."""
     out_csv = tmp_path / "cli_report.csv"
     out_json = tmp_path / "cli_report.json"
@@ -214,7 +233,7 @@ def test_cli_execution(tmp_path):
         sys.executable,
         str(Path(__file__).resolve().parent.parent / "scripts" / "evaluate_f2.py"),
         "--handoff-dir",
-        str(HANDOFF_DIR),
+        str(handoff_dir),
         "--top-k",
         "2",
         "--output-csv",
@@ -232,13 +251,13 @@ def test_cli_execution(tmp_path):
     assert report["macro"]["f2"] == pytest.approx(10 / 21, abs=1e-6)
 
 
-def test_root_entrypoint():
+def test_root_entrypoint(handoff_dir):
     """Verify execution of root evaluate_f2.py."""
     cmd = [
         sys.executable,
         str(Path(__file__).resolve().parent.parent / "evaluate_f2.py"),
         "--handoff-dir",
-        str(HANDOFF_DIR),
+        str(handoff_dir),
         "--top-k",
         "1",
         "--quiet",

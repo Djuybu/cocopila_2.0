@@ -159,6 +159,14 @@ def main():
     )
 
     stats = report_data_statistics(pairs)
+    if target_split in ("train", "val"):
+        other_split = "val" if target_split == "train" else "train"
+        other_pairs = generate_reranker_pairs(
+            queries, chunks, labels, split_info=split_info, target_split=other_split,
+            neg_ratio=args.neg_ratio, seed=args.seed,
+        )
+        train_pairs, val_pairs = (pairs, other_pairs) if target_split == "train" else (other_pairs, pairs)
+        stats["leakage_check"] = validate_no_leakage(train_pairs, val_pairs, split_info)
     stats["target_split"] = args.target_split
     stats["neg_ratio"] = args.neg_ratio
     stats["seed"] = args.seed

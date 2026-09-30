@@ -8,6 +8,7 @@ import pytest
 from src.scoring.cv_threshold import (
     bootstrap_query_split,
     cross_validate_threshold,
+    cross_validate_selector,
     kfold_query_split,
 )
 from src.utils.io import read_json, write_json, write_jsonl
@@ -55,7 +56,9 @@ def test_bootstrap_query_split():
     assert len(splits) == 8
     for train_q, val_q in splits:
         assert len(set(train_q) & set(val_q)) == 0
-        assert len(val_q) == 3
+        assert val_q
+        assert set(val_q) == set(query_ids) - set(train_q)
+    assert any(len(train_q) != len(set(train_q)) for train_q, _ in splits)
 
 
 def test_cross_validate_threshold_kfold(synthetic_cv_records):
@@ -89,11 +92,47 @@ def test_cross_validate_threshold_kfold(synthetic_cv_records):
     assert "recommended_stable_threshold" in report
     assert "pure_peak_threshold" in report
     assert "out_of_fold_generalization" in report
-
     stable = report["recommended_stable_threshold"]
     assert stable["threshold"] in thresholds
     assert len(stable["confidence_interval_95"]) == 2
     assert stable["confidence_interval_95"][0] <= stable["confidence_interval_95"][1]
+    assert stable["confidence_interval_method"] == "query_bootstrap_percentile_fixed_threshold"
+
+
+@pytest.mark.parametrize("folds", [0, 1, -1])
+def test_kfold_rejects_invalid_fold_count(folds):
+    with pytest.raises(ValueError, match="n_folds"):
+        kfold_query_split(["q1", "q2"], n_folds=folds)
+
+
+def test_joint_selector_reports_held_out_performance():
+    records = [
+        {"id": "q1", "candidates": [{"chunk_id": "good1", "score": .8}, {"chunk_id": "bad1", "score": .6}]},
+        {"id": "q2", "candidates": [{"chunk_id": "good2", "score": .4}]},
+    ]
+    labels = [{"id": "q1", "relevant_chunks": ["good1"]}, {"id": "q2", "relevant_chunks": ["good2"]}]
+    report = cross_validate_selector(records, labels, thresholds=[.3, .7], fallbacks=[0], maximums=[3])
+    assert report["macro"]["f2"] == pytest.approx(5 / 12)
+    assert report["query_count"] == 2
+    for fold in report["folds"]:
+        assert not set(fold["train_query_ids"]) & set(fold["val_query_ids"])
+        expected = .7 if fold["train_query_ids"] == ["q1"] else .3
+        assert fold["selector"]["chunk_threshold"] == expected
+
+
+def test_bootstrap_reproducible_and_with_replacement():
+    ids = [f"q{i}" for i in range(8)]
+    first = bootstrap_query_split(ids, n_rounds=10, seed=7)
+    assert first == bootstrap_query_split(ids, n_rounds=10, seed=7)
+    assert all(len(train) == len(ids) for train, _ in first)
+    assert all(set(val) == set(ids) - set(train) for train, val in first)
+    assert any(len(set(train)) < len(train) for train, _ in first)
+
+
+def test_cv_rejects_missing_label_queries(synthetic_cv_records):
+    records, labels = synthetic_cv_records
+    with pytest.raises(ValueError, match="match exactly"):
+        cross_validate_threshold(records[:-1], labels)
 
 
 def test_cross_validate_threshold_bootstrap(synthetic_cv_records):

@@ -210,3 +210,36 @@ def test_p2_full_pipeline_end_to_end(handoff_config, tmp_path):
     assert (p3_output / "p2_selected_chunks.json").exists()
     assert (p3_output / "manifest.json").exists()
     assert Path(summary["p3_handoff"]["archive_zip"]).exists()
+    cv = summary["optimization"]["cross_validation"]
+    assert cv["status"] == "complete"
+    assert set(cv["per_query"]) == {row["id"] for row in read_json(p2_output / "labels.json")}
+    manifest = read_json(p3_output / "manifest.json")
+    assert "selector_cv_report.json" in manifest["files"]
+    assert sha256_file(p3_output / "selector_cv_report.json") == manifest["files"]["selector_cv_report.json"]
+
+
+def test_pipeline_keeps_existing_output(handoff_config, tmp_path):
+    bundle = export_reranking_input(handoff_config)
+    output = tmp_path / "existing"
+    output.mkdir()
+    sentinel = output / "keep.txt"
+    sentinel.write_text("previous results")
+    with pytest.raises(FileExistsError):
+        run_p2_full_pipeline(bundle, output, reranker=MockReranker())
+    assert sentinel.read_text() == "previous results"
+
+
+def test_pipeline_rejects_output_that_contains_input(handoff_config):
+    bundle = export_reranking_input(handoff_config)
+    with pytest.raises(ValueError, match="separate"):
+        run_p2_full_pipeline(bundle, bundle.parent, reranker=MockReranker())
+    assert (bundle / "manifest.json").exists()
+
+
+def test_packaging_keeps_existing_archive(tmp_path):
+    archive = tmp_path / "handoff.zip"
+    archive.write_bytes(b"existing archive")
+    with pytest.raises(FileExistsError):
+        package_p2_to_p3_handoff(tmp_path / "handoff", tmp_path / "source", {}, None, None)
+    assert archive.read_bytes() == b"existing archive"
+    assert not (tmp_path / "handoff").exists()

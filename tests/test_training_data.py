@@ -153,3 +153,35 @@ def test_cli_generate_training_data_execution(corpus_and_queries, tmp_path):
 
     stats = read_json(report_file)
     assert stats["num_positives"] == 3
+    assert stats["leakage_check"]["status"] == "clean"
+
+
+def test_explicit_negatives_cannot_cross_splits(corpus_and_queries):
+    queries, chunks, labels = corpus_and_queries
+    queries[0]["negative_chunk_ids"] = ["c5"]  # validation positive
+    pairs = generate_reranker_pairs(queries, chunks, labels, target_split="train")
+    assert all(p["doc_id"] != "d4" for p in pairs)
+
+
+def test_negative_positive_document_overlap_is_leakage():
+    with pytest.raises(ValueError, match="Document leakage"):
+        validate_no_leakage(
+            [{"query_id": "train", "doc_id": "shared", "label": 0.0}],
+            [{"query_id": "val", "doc_id": "shared", "label": 1.0}],
+        )
+
+
+def test_conflicting_positive_split_is_rejected(corpus_and_queries):
+    queries, chunks, labels = corpus_and_queries
+    splits = {"documents": {"d1": "val"}}
+    with pytest.raises(ValueError, match="Conflicting split"):
+        generate_reranker_pairs(queries, chunks, labels, split_info=splits)
+
+
+def test_unassigned_queries_require_explicit_all_mode():
+    queries = [{"id": "q", "text": "query"}]
+    chunks = [{"chunk_id": "c", "doc_id": "d", "text": "text"}]
+    labels = [{"id": "q", "relevant_chunks": ["c"]}]
+    with pytest.raises(ValueError, match="Split assignments"):
+        generate_reranker_pairs(queries, chunks, labels)
+    assert len(generate_reranker_pairs(queries, chunks, labels, target_split=None)) == 1

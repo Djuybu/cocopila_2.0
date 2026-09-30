@@ -169,6 +169,9 @@ def sweep_reranker_thresholds(
         tuple: (sweep_df, plateau_info, recommended_config)
     """
     mapping = internal_to_official or {}
+    from src.data.schema import unique_ids
+    if unique_ids(scored_records, "id") != unique_ids(labels, "id"):
+        raise ValueError("Candidate and label query IDs must match exactly")
     label_map = {row["id"]: set(row.get("relevant_chunks", [])) for row in labels}
     num_queries = len(label_map)
     if num_queries == 0:
@@ -296,6 +299,9 @@ def sweep_chunk_selector(
         tuple (best_config, sweep_df, plateau_info)
     """
     mapping = internal_to_official or {}
+    from src.data.schema import unique_ids
+    if unique_ids(scored_records, "id") != unique_ids(labels, "id"):
+        raise ValueError("Candidate and label query IDs must match exactly")
     label_map = {row["id"]: set(row.get("relevant_chunks", [])) for row in labels}
 
     # Pre-process candidates per query to avoid repeating official ID collapse
@@ -542,9 +548,13 @@ def package_p2_to_p3_handoff(
     """
     output = Path(output_dir).resolve()
     source = Path(source_run_dir).resolve()
-
+    archive_path = output.parent / f"{output.name}.zip"
+    if output == source or source.is_relative_to(output):
+        raise ValueError("Handoff output must not contain its source run")
     if output.exists():
-        shutil.rmtree(output)
+        raise FileExistsError(output)
+    if archive_zip and archive_path.exists():
+        raise FileExistsError(archive_path)
     output.mkdir(parents=True, exist_ok=False)
 
     # 1. Deliverable 1: Scored Candidates (reranked.jsonl)
@@ -603,7 +613,7 @@ def package_p2_to_p3_handoff(
     fn_df.to_csv(output / "fn_analysis.csv", index=False)
 
     # 5b. P2-02 detailed evaluation report if present in source
-    for opt_report in ("p2_f2_evaluation_report.csv", "p2_f2_evaluation_report.json"):
+    for opt_report in ("p2_f2_evaluation_report.csv", "p2_f2_evaluation_report.json", "selector_cv_report.json"):
         if (source / opt_report).exists():
             shutil.copy2(source / opt_report, output / opt_report)
 
@@ -631,6 +641,7 @@ def package_p2_to_p3_handoff(
         "reranker_benchmark.json",
         "p2_f2_evaluation_report.csv",
         "p2_f2_evaluation_report.json",
+        "selector_cv_report.json",
     ):
         if (output / opt).exists():
             manifest_files.append(opt)
@@ -654,10 +665,7 @@ def package_p2_to_p3_handoff(
     write_json(output / "manifest.json", manifest)
 
     if archive_zip:
-        archive_path = output.parent / f"{output.name}.zip"
-        if archive_path.exists():
-            archive_path.unlink()
-        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(archive_path, "x", compression=zipfile.ZIP_DEFLATED) as zf:
             for name in manifest_files + ["manifest.json"]:
                 zf.write(output / name, arcname=name)
 

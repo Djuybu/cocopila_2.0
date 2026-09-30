@@ -173,6 +173,8 @@ def evaluate_candidate_selection(
     """
     mapping = internal_to_official or {}
     predictions = []
+    if top_k is not None and (type(top_k) is not int or top_k < 0):
+        raise ValueError("top_k must be a nonnegative integer")
 
     for row in records:
         qid = row["id"]
@@ -194,7 +196,7 @@ def evaluate_candidate_selection(
             selected = ordered[:top_k]
         else:
             fb = fallback if fallback is not None else 0
-            mx = max_chunks if max_chunks is not None else len(mapped_cands)
+            mx = max_chunks if max_chunks is not None else max(len(mapped_cands), fb)
             selected = select_ids(mapped_cands, "chunk_id", threshold, fb, mx)
 
         predictions.append({
