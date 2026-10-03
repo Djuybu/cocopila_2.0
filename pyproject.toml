@@ -16,6 +16,8 @@ qwen = ["sentence-transformers>=6.1"]
 training = ["sentence-transformers[train]>=6.1"]
 benchmark = ["psutil>=5.9"]
 parquet = ["pandas>=2.2", "pyarrow>=16"]
+graph = ["neo4j>=5"]
+xlsx = ["openpyxl>=3.1"]
 
 [tool.setuptools.packages.find]
 where = ["."]

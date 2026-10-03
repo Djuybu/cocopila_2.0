@@ -21,6 +21,10 @@ FlagEmbedding>=1.2.0
 # --- Vector Database ---
 qdrant-client>=1.9.0
 
+# --- Graph Database (P3, optional) ---
+# Cài P3 graph store: pip install -e ".[graph]"
+neo4j>=5.0.0
+
 # --- Sparse / Lexical Search ---
 rank-bm25>=0.2.2
 fastbm25>=0.0.2

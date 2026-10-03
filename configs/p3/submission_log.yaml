@@ -1,0 +1,6 @@
+# P3-16: submission log.
+# Paths are resolved relative to this file.
+submission_log:
+  log_path: ../../submissions/submission_log.csv
+  xlsx_path: ../../submissions/submission_log.xlsx
+  private_limit: 5

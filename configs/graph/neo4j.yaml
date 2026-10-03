@@ -1,0 +1,8 @@
+# P3-11/P3-12: Neo4j graph store connection.
+# The driver is optional: pip install -e ".[graph]".
+# Values fall back to NEO4J_URI / NEO4J_USER / NEO4J_PASSWORD / NEO4J_DATABASE.
+neo4j:
+  uri: bolt://localhost:7687
+  user: neo4j
+  password: neo4j
+  database: neo4j
