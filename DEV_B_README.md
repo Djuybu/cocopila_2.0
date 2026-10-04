@@ -1,60 +1,53 @@
-# 🧠 Hướng dẫn công việc cho DEV B (AI Pipeline & Model Specialist)
+# 🧠 DEV B — Người 2 (Mạc Duy): Reranking, Scoring & Evaluation
 
-Chào **Dev B**, bạn nắm giữ "trái tim" AI của hệ thống. Bạn chịu trách nhiệm toàn bộ luồng tìm kiếm lai (Hybrid Search), tái xếp hạng (Reranking), cơ chế LLM sinh văn bản (Generation) và xử lý rào cản ngôn ngữ (Multilingual).
+Bạn phụ trách **P2-01 → P2-15** trong `Chia việc.xlsx` (sheet `Checklist`): nhận
+candidates từ Người 1, rerank, đánh giá F2 chunk-level, tuning threshold/fallback/max,
+tạo dữ liệu huấn luyện + hard negatives, fine-tune, cross-validation và bàn giao gói P2→P3.
 
-Dưới đây là danh sách các công việc và các file bạn đang "làm chủ" (Owner):
+- **Phạm vi code**: `src/reranking/**`, `src/scoring/**`, `src/training/**`, `src/evaluation/{evaluate_f2,fbeta,reranking_metrics}.py`, `src/pipeline/{rerank,reranker_benchmark,predict,p2_pipeline}.py`, `configs/reranker/**`, `configs/training/**`, `scripts/{run_reranking,benchmark_reranking,evaluate_f2,sweep_threshold,sweep_fallback,sweep_max_output,cv_threshold,generate_training_data,mine_hard_negatives,finetune_reranker}.py`.
+- **Bàn giao**: `p2_to_p3_handoff/` + `.zip` (`reranked.jsonl`, `best_chunk_selector.yaml`, `p2_selected_chunks.json`, `threshold_sweep.csv`, `fn_analysis.csv`, `manifest.json`) — dùng trực tiếp cho P3-02/04/05/06/15.
+- **Tài liệu**: `docs/p2_02_manual_calculation_guide.md` (công thức F2 tính tay).
 
-## 📂 Các file do bạn phụ trách:
-**Module Retrieval (Tìm kiếm):**
-- `src/retrieval/dense_search.py`
-- `src/retrieval/sparse_search.py`
-- `src/retrieval/hybrid_fusion.py`
-- `src/retrieval/reranker.py`
-- `src/retrieval/aggregator.py`
+## 📋 Bảng công việc P2 (nội dung theo `Chia việc.xlsx`)
 
-**Module Generation (Sinh văn bản):**
-- `src/generation/llm_loader.py`
-- `src/generation/rag_chain.py`
+| ID | Giai đoạn | Module | Đầu việc | Deliverable | Ưu tiên | Phụ thuộc | Trạng thái (xlsx) | Trạng thái repo |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| P2-01 | Trước 01/10 | Reranking | Dựng BGE reranker baseline | Reranker inference module | P0 | P1-11 | Hoàn thành | Hoàn thành |
+| P2-02 | Trước 01/10 | Metrics | Evaluation F2 chunk-level | evaluate_f2.py | P0 | — | Đang làm | Hoàn thành |
+| P2-03 | Trước 01/10 | Threshold | Sweep threshold reranker | threshold_sweep.csv | P0 | P2-01,P2-02 | Chưa làm | Hoàn thành |
+| P2-04 | Trước 01/10 | Fallback | Thử minimum fallback Top-N | Fallback selector | P0 | P2-03 | Chưa làm | Hoàn thành |
+| P2-05 | Trước 01/10 | Output cap | Thử max-N | Max-output selector | P1 | P2-03 | Chưa làm | Hoàn thành |
+| P2-06 | Trước 01/10 | Training data | Tạo pair positive/negative | reranker_train.jsonl | P0 | P1-03 | Chưa làm | Hoàn thành |
+| P2-07 | Trước 01/10 | Hard negatives | Mine hard negatives | hard_negatives.jsonl | P1 | P1-08,P2-06 | Chưa làm | Hoàn thành |
+| P2-08 | Trước 01/10 | Fine-tuning | Fine-tune reranker | Reranker checkpoint v1 | P1 | P2-07 | Chưa làm | Hoàn thành code (chờ checkpoint thật) |
+| P2-09 | Trước 01/10 | CV | Cross-validation threshold | CV threshold report | P1 | P2-03 | Chưa làm | Hoàn thành |
+| P2-10 | Sau 01/10 | Metric replication | Mô phỏng metric BTC | official_metric_local.py | P0 | P1-12 | Chưa làm | Chưa làm (chờ định nghĩa metric BTC) |
+| P2-11 | Sau 01/10 | Reranker benchmark | Benchmark reranker trên data thật | reranker_benchmark.csv | P0 | P2-10,P1-13 | Chưa làm | Hoàn thành code (chạy thật cần GPU/weights) |
+| P2-12 | Sau 01/10 | F2 tuning | Joint sweep selector | best_chunk_selector.yaml | P0 | P2-11,P1-14 | Chưa làm | Hoàn thành |
+| P2-13 | Sau 01/10 | Score calibration | Thử calibration nếu cần | Calibration ablation | P2 | P2-12 | Chưa làm | Chưa làm (chỉ làm nếu CV tăng) |
+| P2-14 | Tối ưu | False negative analysis | Phân tích FN sau rerank | fn_analysis.csv | P1 | P2-12 | Chưa làm | Hoàn thành |
+| P2-15 | Tối ưu | Inference optimization | Tối ưu batch reranking | rerank pipeline tối ưu | P2 | P2-12 | Chưa làm | Chưa làm (tùy chọn latency) |
 
-**Module Multilingual (Đa ngôn ngữ):**
-- `src/multilingual/shift.py`
-- `src/multilingual/translator.py`
-- `src/multilingual/medical_ner.py`
+## 🎯 Chi tiết thực hiện & tiêu chí hoàn thành
 
----
-
-## 🎯 Chi tiết nhiệm vụ cần triển khai (Implementation Tasks)
-
-### 1. Hybrid Search & Reranking (Luồng truy xuất)
-- **Dense Search (`dense_search.py`):** Viết logic sử dụng mô hình `BAAI/bge-m3` để mã hóa truy vấn thành vector (1024-dim) và query vào Qdrant DB do Dev A chuẩn bị. Chú ý thêm instruction "Represent this sentence for searching relevant passages:" khi encode truy vấn.
-- **Sparse Search (`sparse_search.py`):** Viết hàm load BM25 index do Dev A xây dựng và truy vấn ra Top K kết quả.
-- **Fusion (`hybrid_fusion.py`):** Implement 2 thuật toán dung hợp điểm số: 
-  - *Reciprocal Rank Fusion (RRF)*
-  - *Convex Combination (CC)* (Ưu tiên dùng CC với hệ số alpha điều chỉnh giữa Dense và Sparse). Nhớ chuẩn hóa điểm số (Min-Max normalization) trước khi fuse.
-- **Cross-Encoder (`reranker.py`):** Dùng mô hình `bge-reranker-v2-m3` (chạy trên GPU) để tái chấm điểm (rerank) Top 200 ứng viên từ Hybrid Search. Trả về Top 10-20 chunk chất lượng nhất (`relevant_chunks`).
-- **Aggregation (`aggregator.py`):** Áp dụng chiến lược `Max-P` để quy đổi điểm của các chunks về điểm của tài liệu (doc), từ đó lấy ra danh sách tài liệu (`relevant_docs`).
-
-### 2. LLM Engine & RAG Chain (Luồng sinh)
-- **LLM Loader (`llm_loader.py`):** 
-  - Dùng `llama-cpp-python` để nạp mô hình Qwen2.5-7B-Instruct định dạng GGUF (Q4_K_M). 
-  - Cấu hình offload toàn bộ các layer lên GPU (`n_gpu_layers=-1`). Đảm bảo quản lý VRAM tốt (VRAM cho LLM chiếm khoảng 4.5GB).
-- **LangGraph Orchestration (`rag_chain.py`):** 
-  - Xây dựng luồng `StateGraph` với các node: Retrieve -> Rerank -> Aggregate -> Generate -> Reflect.
-  - Implement cơ chế tự sửa lỗi (Reflect) nếu LLM nhận thấy context không đủ để trả lời truy vấn.
-
-### 3. Xử lý Đa ngôn ngữ chuyên sâu
-- **Medical NER & Translation (`medical_ner.py`, `translator.py`):** 
-  - Nhận diện thực thể lâm sàng trong câu hỏi (disease, drug, symptom).
-  - Mở rộng câu truy vấn đa ngữ (mapping sang mã UMLS).
-  - (Tùy chọn) Triển khai mô hình dịch NLLB-200.
-- **SHIFT Calibration (`shift.py`):** 
-  - Thuật toán loại bỏ thiên kiến ngôn ngữ. Tính toán "Vector tương đối" giữa tiếng Việt và tiếng Anh/Trung, sau đó tịnh tiến (shift) vector không gian để hệ thống chỉ so khớp ý nghĩa y khoa chứ không bị lệch do khác biệt ngôn ngữ.
-
----
+- **P2-01 Dựng BGE reranker baseline** — Nhận candidates từ Người 1; score từng cặp query-chunk bằng BGE reranker v2 m3 (và Qwen3 qua factory). *Tiêu chí*: xuất score cho toàn bộ candidates; giữ nguyên query/chunk/doc ID.
+- **P2-02 Evaluation F2 chunk-level** — Tính precision, recall, F1, F2 theo query và macro aggregate cho `relevant_chunks`. *Tiêu chí*: khớp công thức F2; có unit test trên ví dụ nhỏ tính tay.
+- **P2-03 Sweep threshold reranker** — Quét threshold trên validation; lưu P/R/F2 và số chunk output/query. *Tiêu chí*: xác định được vùng threshold plateau, không chỉ 1 điểm tốt nhất.
+- **P2-04 Thử minimum fallback Top-N** — Nếu số chunk qua threshold < N_min, lấy Top-N theo reranker score; sweep N_min. *Tiêu chí*: có ablation threshold-only vs fallback; F2 không giảm trên CV.
+- **P2-05 Thử max-N** — Giới hạn số chunk output/query để tránh precision sụt khi quá nhiều candidate qua threshold. *Tiêu chí*: có sweep max-N và phân tích tác động Precision/Recall/F2.
+- **P2-06 Tạo pair positive/negative** — Từ anchor-positive-negative tạo cặp query/chunk có label; ưu tiên giữ metadata và split đúng. *Tiêu chí*: không leakage giữa train/val; tỷ lệ pos/neg được báo cáo.
+- **P2-07 Mine hard negatives** — Dùng BM25/dense top results sai label làm hard negative; loại false negative nghi ngờ. *Tiêu chí*: hard negative có similarity cao hơn random negative và không chứa ground-truth positive.
+- **P2-08 Fine-tune reranker** — Fine-tune cross-encoder/reranker trên positive + hard negatives; lưu config, checkpoint, seed. *Tiêu chí*: F2/Recall trên validation ≥ baseline hoặc có lý do loại bỏ.
+- **P2-09 Cross-validation threshold** — Tune threshold/fallback qua nhiều fold hoặc bootstrap query; tránh overfit một validation split. *Tiêu chí*: chọn threshold ổn định; báo mean/std F2.
+- **P2-10 Mô phỏng metric BTC** — Đọc định nghĩa metric chính thức; xác định cách combine doc/chunk score nếu BTC có; viết evaluator giống BTC nhất có thể. *Tiêu chí*: chạy được submission JSON và trả score local; unit test các edge case.
+- **P2-11 Benchmark reranker trên data thật** — So sánh off-the-shelf BGE với fine-tuned; thử batch size/max length hợp lý. *Tiêu chí*: có F2_chunk, latency/query, VRAM và lựa chọn model.
+- **P2-12 Joint sweep selector** — Tune `threshold_chunk, fallback_chunk, max_chunk, candidate_K`; tối ưu trực tiếp F2_chunk. *Tiêu chí*: cấu hình tái lập được; score xác nhận lại trên holdout.
+- **P2-13 Thử calibration nếu cần** — Nếu raw score phân phối khác mạnh giữa query, thử Platt/isotonic hoặc query-relative threshold. *Tiêu chí*: chỉ giữ nếu CV F2 tăng ổn định; tránh thêm complexity không cần thiết.
+- **P2-14 Phân tích FN sau rerank** — Tách FN do candidate miss và FN do reranker/threshold; gửi candidate-miss lại Người 1. *Tiêu chí*: mỗi FN có nguyên nhân; loop cải tiến giữa P1/P2 được ghi nhận.
+- **P2-15 Tối ưu batch reranking** — Batch inference, truncate hợp lý, cache query, mixed precision nếu an toàn. *Tiêu chí*: không đổi prediction so với bản chuẩn; latency giảm hoặc throughput tăng rõ.
 
 ## 🤝 Phối hợp
-- Nhận Index từ **Dev A** để test retrieval pipeline.
-- Làm việc chặt chẽ với **Dev C** để cung cấp VRAM metrics thực tế của các mô hình, đảm bảo hệ thống không vượt quá 15GB VRAM.
-- Tuân thủ cấu trúc dữ liệu JSON đầu ra mà hệ thống yêu cầu.
+- Nhận index/candidates từ **Người 1** (P1-11) để test retrieval/rerank pipeline.
+- Bàn giao gói P2→P3 cho **Người 3**; gói dùng `input_manifest.json` giữ provenance P1.
+- Không coi điểm tuning trên `best_chunk_selector.yaml` là điểm generalisation; dùng out-of-fold trong `selector_cv_report.json`.
 
-Cố lên! Bạn đang xây dựng bộ não thông minh nhất cho dự án! 🚀

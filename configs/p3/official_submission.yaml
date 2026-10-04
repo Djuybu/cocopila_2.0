@@ -1,0 +1,11 @@
+# P3-15: official submission generation + ZIP packing.
+# Paths are resolved relative to this file.
+official_submission:
+  source_run_dir: ../../outputs/p2_to_p3_handoff
+  scored_path: ../../outputs/p2_to_p3_handoff/reranked.jsonl
+  chunk_selector_path: ../../outputs/p2_to_p3_handoff/best_chunk_selector.yaml
+  doc_pipeline_path: ../../outputs/p3_doc_pipeline/best_doc_pipeline.yaml
+  registry_path: ../../outputs/p2_to_p3_handoff/registry.json
+  output_dir: ../../outputs/p3_submission
+  submission_dir: ../../submissions/public
+  run_id: p3_0001
