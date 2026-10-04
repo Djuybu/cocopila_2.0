@@ -1,0 +1,7 @@
+{
+  "state": "waiting_for_legacy_controller",
+  "legacy_version": 10,
+  "legacy_status": "KERNELWORKERSTATUS.RUNNING",
+  "compute": "CPU",
+  "recorded_at": "2026-10-04T04:40:47.833476+00:00"
+}
