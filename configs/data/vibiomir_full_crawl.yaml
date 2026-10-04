@@ -1,0 +1,16 @@
+extends: vibiomir_rag.yaml
+rag:
+  workers: 4
+  timeout_seconds: 20
+  min_text_chars: 100
+  browser_fallback: true
+  browser_timeout_seconds: 25
+  browser_failure_ttl_seconds: 3600
+  max_extracted_text_bytes: 2097152
+full_crawl:
+  shard_size: 1000
+  budget_seconds: 21600
+  first_checkpoint_seconds: 60
+  slots: 2
+  max_resume_runs: 8
+  publish_interval_seconds: 86400

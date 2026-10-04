@@ -1,0 +1,21 @@
+extends: vibiomir.yaml
+rag:
+  seed: 42
+  sample_per_host: 3
+  workers: 8
+  timeout_seconds: 12
+  max_response_bytes: 2097152
+  min_text_chars: 200
+  delay_per_host_seconds: 1.0
+  prefer_https: false
+  retry_attempts: 3
+  retry_backoff_seconds: 1
+  max_retry_wait_seconds: 30
+  robots_cache_seconds: 3600
+  robots_failure_ttl_seconds: 60
+  user_agent: "ViBioMIR-RAG/0.1 (+https://github.com/Djuybu/cocopila_2.0)"
+  chunk_chars: 1200
+  chunk_overlap: 150
+  keep_raw: false
+  bootstrap_replicates: 500
+  embedding_dimension: 1024

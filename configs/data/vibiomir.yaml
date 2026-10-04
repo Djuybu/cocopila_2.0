@@ -1,0 +1,14 @@
+# Official URL catalogue; document content, chunks and qrels are not published here.
+data:
+  repo: AIGuruTinix/ViBioMIR
+  revision: 0148f6f80ffafed5c005af6d506ccfd9d3fb47a7
+  raw_dir: ../../data/raw/vibiomir
+  output_dir: ../../data/processed/vibiomir
+  report_dir: ../../outputs/vibiomir_research
+  files:
+    query.parquet:
+      size: 81826
+      sha256: ce13508b893bbd6b9169679d540630bc37eb5950cad08b4d5e0e5d7063670c08
+    links_corpus.parquet:
+      size: 35111121
+      sha256: dee1153f5b9d9010dea18e1b7724b4915ff847b711d036bec8b933486802a971
