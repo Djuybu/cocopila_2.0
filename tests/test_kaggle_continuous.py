@@ -42,7 +42,7 @@ def test_missing_native_coordinator_can_be_replaced_after_owner_listing_confirms
             # Prove the ownership gate permits adoption without accessing live Kaggle state.
             Path(path).mkdir(parents=True, exist_ok=True)
     called=[]
-    monkeypatch.setattr(module, "restore_snapshot", lambda *a, **k: called.append("restore") or {})
+    monkeypatch.setattr(module, "restore_snapshot", lambda *a, **k: called.append("restore") or {"cloud_crawl":{},"full_crawl":{}})
     monkeypatch.setattr(module, "ContinuousKaggleRunner", lambda *a, **k: SimpleNamespace(tick=lambda:{"state":"building"}))
     result=module.continuous_tick(tmp_path,"owner",tmp_path/"state",API(),workflow_url="cloud")
     assert result["state"]=="building" and called==["restore"]
