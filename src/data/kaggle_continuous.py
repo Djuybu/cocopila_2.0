@@ -23,6 +23,12 @@ def kernel_details(api, ref):
     return response.metadata, response.blob.source
 
 
+def kernel_exists(api, ref):
+    _, slug = ref.split("/", 1)
+    kernels = api.kernels_list(mine=True, search=slug, page_size=100)
+    return any(item.ref == ref for item in kernels or [])
+
+
 def version_status(api, ref, version):
     # Kaggle CLI's kernels_status ignores the parsed version. The SDK supports
     # version_label="v10", which is essential during coordinator migration.
@@ -42,7 +48,15 @@ def is_active(status):
 
 def park_native_coordinator(api, ref, folder, workflow_url):
     """Make future Daily runs harmless, without exposing or reattaching Secrets."""
-    metadata, source = kernel_details(api, ref)
+    try:
+        metadata, source = kernel_details(api, ref)
+    except Exception as error:
+        if getattr(getattr(error, "response", None), "status_code", None) != 404:
+            raise
+        if kernel_exists(api, ref):
+            raise RuntimeError("Kaggle still lists the native coordinator but its latest source is unavailable") from None
+        LOGGER.info("Native coordinator no longer exists on Kaggle; adopting its last durable checkpoint")
+        return True
     if PARK_MARKER in source:
         return True
     if is_active(str(api.kernels_status(ref).status)):
@@ -161,7 +175,16 @@ class ContinuousKaggleRunner(CloudKaggleRunner):
 def continuous_tick(project, owner, root, api, *, legacy_version=10, workflow_url):
     """Safely adopt the native controller's final checkpoint, then run one tick."""
     ref = f"{owner}/vibiomir-cloud-coordinator"
-    status = version_status(api, ref, legacy_version)
+    try:
+        status = version_status(api, ref, legacy_version)
+    except Exception as error:
+        if getattr(getattr(error, "response", None), "status_code", None) != 404:
+            raise
+        # A removed coordinator has no live session to wait for. Confirm the
+        # owner-scoped notebook listing before allowing automatic adoption.
+        if kernel_exists(api, ref):
+            raise RuntimeError("Kaggle lists the native coordinator, but its session status is unavailable") from None
+        status = "KERNEL_NOT_FOUND"
     if is_active(status):
         return {"state":"waiting_for_legacy_controller", "legacy_version":legacy_version,
                 "legacy_status":status, "compute":"CPU"}

@@ -29,6 +29,34 @@ def test_tick_does_not_touch_live_native_controller(tmp_path, monkeypatch):
     assert not (tmp_path/"new").exists()
 
 
+def test_missing_native_coordinator_can_be_replaced_after_owner_listing_confirms_absence(tmp_path, monkeypatch):
+    class MissingKernel(Exception):
+        response = SimpleNamespace(status_code=404)
+    monkeypatch.setattr(module, "version_status", lambda *a: (_ for _ in ()).throw(MissingKernel()))
+    monkeypatch.setattr(module, "kernel_exists", lambda *a: False)
+    monkeypatch.setattr(module, "park_native_coordinator", lambda *a: True)
+    monkeypatch.setattr(module, "wait_ready", lambda *a: None)
+    class API:
+        def dataset_status(self, ref, format=None): return json.dumps({"current_version_number":1})
+        def dataset_download_files(self, ref, path, **kwargs):
+            # Prove the ownership gate permits adoption without accessing live Kaggle state.
+            Path(path).mkdir(parents=True, exist_ok=True)
+    called=[]
+    monkeypatch.setattr(module, "restore_snapshot", lambda *a, **k: called.append("restore") or {})
+    monkeypatch.setattr(module, "ContinuousKaggleRunner", lambda *a, **k: SimpleNamespace(tick=lambda:{"state":"building"}))
+    result=module.continuous_tick(tmp_path,"owner",tmp_path/"state",API(),workflow_url="cloud")
+    assert result["state"]=="building" and called==["restore"]
+
+
+def test_missing_native_coordinator_is_not_replaced_if_listing_still_shows_it(tmp_path, monkeypatch):
+    class MissingKernel(Exception):
+        response = SimpleNamespace(status_code=404)
+    monkeypatch.setattr(module, "version_status", lambda *a: (_ for _ in ()).throw(MissingKernel()))
+    monkeypatch.setattr(module, "kernel_exists", lambda *a: True)
+    with pytest.raises(RuntimeError, match="session status is unavailable"):
+        module.continuous_tick(tmp_path,"owner",tmp_path/"state",object(),workflow_url="cloud")
+
+
 def test_parked_notebook_is_cpu_only_and_cannot_mutate_the_corpus(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "kernel_details", lambda *a: (SimpleNamespace(), "old code"))
     captured = []
